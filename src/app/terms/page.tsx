@@ -56,7 +56,7 @@ export default async function TermsPage() {
 
           <div className="card p-6 sm:p-8">
             <div className="prose prose-sm max-w-none text-text-primary">
-              {termsText.split('\n').map((line, i) => {
+              {termsText.split('\n').map((line: string, i: number) => {
                 const trimmed = line.trim()
                 if (!trimmed) return <div key={i} className="h-3" />
                 return (
