@@ -43,6 +43,7 @@ interface Settings {
   history_visible: boolean
   platform_name: string
   entry_deadline: string | null
+  registration_open: boolean
 }
 
 export default function StandingsPage() {
