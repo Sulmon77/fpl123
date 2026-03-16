@@ -207,7 +207,7 @@ export default async function HomePage() {
             <div className="grid grid-cols-3 divide-x divide-border">
               {[
                 { label: 'Group size', value: 'Up to 32' },
-                { label: 'Weekly fee', value: formatKES(entryFee) },
+                { label: 'Member Pass', value: formatKES(entryFee) },
                 { label: 'Paid via', value: 'M-Pesa & PayPal' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex flex-col items-center py-5 px-4 text-center">
