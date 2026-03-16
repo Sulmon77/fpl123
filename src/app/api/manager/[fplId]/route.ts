@@ -97,7 +97,7 @@ export async function POST(
       )
     }
 
-    const group = groupMember.groups as { group_number: number; gameweek_number: number } | null
+    const group = groupMember.groups as unknown as { group_number: number; gameweek_number: number } | null
 
     logger.auth.success(`PIN verified for FPL ID ${fplTeamId}, group ${group?.group_number}`, { file })
 
