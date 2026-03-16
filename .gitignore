@@ -1,0 +1,13 @@
+echo "# Dependencies
+node_modules
+
+# Build output
+.next
+
+# Environment variables
+.env.local
+.env*.local
+
+# OS files
+.DS_Store
+Thumbs.db" > .gitignore
