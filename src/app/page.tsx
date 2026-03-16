@@ -300,7 +300,8 @@ export default async function HomePage() {
                   .filter(([k]) => k !== 'platform')
                   .sort(([a], [b]) => parseInt(a) - parseInt(b))
                   .map(([pos, pct]) => {
-                    const amount = Math.floor(distributable * (Number(pct) / 100))
+                    const pctNum = Number(pct)
+                    const amount = Math.floor(distributable * (pctNum / 100))
                     const isFirst = pos === '1'
                     return (
                       <div
@@ -320,7 +321,7 @@ export default async function HomePage() {
                           {pos === '1' ? '🥇' : pos === '2' ? '🥈' : pos === '3' ? '🥉' : `#${pos}`}
                         </div>
                         <div className="font-display font-bold text-2xl text-brand-green mb-0.5">
-                          {pct}%
+                          {pctNum}%
                         </div>
                         <div className="text-white/30 text-xs">up to {formatKES(amount)}</div>
                       </div>
