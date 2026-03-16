@@ -222,7 +222,7 @@ export default function EnterPage() {
         {/* ── STEP 2: Confirm Manager ── */}
         {step === 2 && manager && (
           <div className="animate-slide-up space-y-4">
-            <ManagerCard manager={manager} gameweekNumber={settings.gameweek_number} />
+            <ManagerCard manager={manager} fplTeamId={manager.fpl_team_id} />
             <div className="space-y-3">
               <button onClick={() => setStep(3)} className="btn-primary w-full">
                 That&apos;s me — Continue <ChevronRight className="w-4 h-4" />
