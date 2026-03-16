@@ -61,7 +61,7 @@ export function AdminSidebar({ adminPath }: AdminSidebarProps) {
           <Zap className="w-5 h-5 text-brand-purple fill-current" />
         </div>
         {!collapsed && (
-          <span className="font-display font-bold text-white text-lg">FPLNow Admin</span>
+          <span className="font-display font-bold text-white text-lg">FPL123 Admin</span>
         )}
       </div>
 
@@ -150,7 +150,7 @@ export function AdminSidebar({ adminPath }: AdminSidebarProps) {
           <div className="w-7 h-7 rounded-lg bg-brand-green flex items-center justify-center">
             <Zap className="w-4 h-4 text-brand-purple fill-current" />
           </div>
-          <span className="font-display font-bold text-white">FPLNow Admin</span>
+          <span className="font-display font-bold text-white">FPL123 Admin</span>
         </div>
         <button
           onClick={() => setMobileOpen(!mobileOpen)}

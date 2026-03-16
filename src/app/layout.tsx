@@ -22,12 +22,12 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'FPLNow — Your FPL Performance, Finally Recognised',
+  title: 'FPL123',
   description:
     'Enter each gameweek, get grouped with other managers, and compete for prizes based on your Fantasy Premier League points.',
   keywords:['FPL', 'Fantasy Premier League', 'Kenya', 'FPL giveaway', 'FPL competition'],
   openGraph: {
-    title: 'FPLNow',
+    title: 'FPL123',
     description: 'Your FPL Performance, Finally Recognised',
     type: 'website',
   },
