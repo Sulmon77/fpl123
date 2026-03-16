@@ -35,8 +35,8 @@ export function createServerSupabaseClient() {
 // SERVER COMPONENT Supabase (with cookie support)
 // Uses anon key — for server components that need auth context
 // =============================================
-export function createServerComponentClient() {
-  const cookieStore = cookies()
+export async function createServerComponentClient() {
+  const cookieStore = await cookies()
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       get(name: string) {
