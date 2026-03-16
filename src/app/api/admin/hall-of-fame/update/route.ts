@@ -136,8 +136,10 @@ export async function POST(request: NextRequest) {
       participantsUpdated++
     }
 
-    logger.info?.(
-      `Hall of Fame updated for GW${gw}: ${winnersUpdated} winners, ${participantsUpdated} participants`
+    logger.info(
+      'HALL-OF-FAME',
+      `Hall of Fame updated for GW${gw}: ${winnersUpdated} winners, ${participantsUpdated} participants`,
+      { file }
     )
 
     return NextResponse.json({
