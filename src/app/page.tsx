@@ -339,8 +339,8 @@ export default async function HomePage() {
             <div className="grid sm:grid-cols-3 gap-6">
               {[
                 { icon: Shield, title: 'Verified Payments', body: 'M-Pesa STK Push and PayPal. Trusted payment rails.' },
-                { icon: Users, title: 'Small, Focused Groups', body: 'You are placed in one dedicated small group each week — randomly assigned, no bias.' },
-                { icon: Trophy, title: 'Direct Transfers', body: 'Top scorers receive funds straight to their account. No vouchers, no delays.' },
+                { icon: Users, title: 'Small, Focused Groups', body: 'You are placed in one dedicated small peer group each week ' },
+                { icon: Trophy, title: 'Direct Transfers', body: 'The best receive funds straight to their account.' },
               ].map(({ icon: Icon, title, body }) => (
                 <div key={title} className="flex items-start gap-4">
                   <div className="w-10 h-10 rounded-xl bg-brand-purple/8 border border-brand-purple/10 flex items-center justify-center flex-shrink-0 mt-0.5">
