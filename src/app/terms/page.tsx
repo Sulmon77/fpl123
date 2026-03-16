@@ -29,7 +29,7 @@ export default async function TermsPage() {
   const supabase = createServerSupabaseClient()
   const { data: settings } = await supabase
     .from('settings')
-    .select('terms_text, platform_name, hall_of_fame_enabled, history_visible')
+    .select('terms_text, platform_name, hall_of_fame_enabled, history_visible, registration_open')
     .single()
 
   const termsText = settings?.terms_text || DEFAULT_TERMS
