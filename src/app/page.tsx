@@ -142,7 +142,7 @@ export default async function HomePage() {
               </h1>
 
               <p className="text-white/50 text-[1.05rem] sm:text-lg mb-10 max-w-md leading-relaxed animate-slide-up delay-75">
-                A small private circle of serious FPL managers. The best each week get paid — straight to M-Pesa or PayPal.
+                A small private circle of serious FPL managers. The best get recognised and paid — straight to M-Pesa or PayPal.
               </p>
 
               {/* Countdown */}
