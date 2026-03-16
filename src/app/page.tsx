@@ -264,7 +264,7 @@ export default async function HomePage() {
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-brand-cyan/5 mb-5">
                   <span className="font-display font-bold text-sm text-brand-cyan">03</span>
                 </div>
-                <h3 className="font-bold text-text-primary text-[1.05rem] mb-2">Top 3 in your circle, get recognised</h3>
+                <h3 className="font-bold text-text-primary text-[1.05rem] mb-2">The best in your circle, get recognised</h3>
                 <p className="text-text-secondary text-sm leading-relaxed">Highest scorers receive their share directly — M-Pesa or PayPal.</p>
               </div>
 
