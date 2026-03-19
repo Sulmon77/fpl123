@@ -10,7 +10,8 @@ import { ManagerCard } from '@/components/entry/ManagerCard'
 import { ConfirmationScreen } from '@/components/entry/ConfirmationScreen'
 import {
   Search, AlertCircle, Loader2, Phone, ChevronRight,
-  CheckCircle, XCircle, RotateCcw, ExternalLink, Zap
+  CheckCircle, XCircle, RotateCcw, ExternalLink, Zap,
+  Info, X
 } from 'lucide-react'
 import { cn, formatKES } from '@/lib/utils'
 import type { ResolvedManager } from '@/types'
@@ -35,33 +36,36 @@ export default function EnterPage() {
 
   const [fplId, setFplId] = useState('')
   const [verifying, setVerifying] = useState(false)
-  const[verifyError, setVerifyError] = useState<string | null>(null)
+  const [verifyError, setVerifyError] = useState<string | null>(null)
   const [verifyErrorCode, setVerifyErrorCode] = useState<string | null>(null)
   const [joinUrl, setJoinUrl] = useState<string | null>(null)
+  
+  // New state for the Help Modal
+  const [showIdHelp, setShowIdHelp] = useState(false)
 
   const [manager, setManager] = useState<ResolvedManager | null>(null)
 
   const [entryId, setEntryId] = useState<string | null>(null)
-  const[paymentMethod, setPaymentMethod] = useState<'mpesa' | 'paypal'>('mpesa')
-  const[phone, setPhone] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<'mpesa' | 'paypal'>('mpesa')
+  const [phone, setPhone] = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [registering, setRegistering] = useState(false)
-  const[paymentInitiated, setPaymentInitiated] = useState(false)
+  const [paymentInitiated, setPaymentInitiated] = useState(false)
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'pending' | 'confirmed' | 'failed'>('idle')
-  const[paymentMessage, setPaymentMessage] = useState('')
+  const [paymentMessage, setPaymentMessage] = useState('')
   const [checkoutRequestId, setCheckoutRequestId] = useState<string | null>(null)
   const [paypalError, setPaypalError] = useState<string | null>(null)
 
   const [pin, setPin] = useState<string | null>(null)
-  const[confirmedManager, setConfirmedManager] = useState<{ name: string; team: string; gw: number } | null>(null)
+  const [confirmedManager, setConfirmedManager] = useState<{ name: string; team: string; gw: number } | null>(null)
 
   const pollRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(d => { if (d.success) setSettings(d.data) }).catch(console.error)
-  },[])
+  }, [])
 
-  useEffect(() => { return () => { if (pollRef.current) clearInterval(pollRef.current) } },[])
+  useEffect(() => { return () => { if (pollRef.current) clearInterval(pollRef.current) } }, [])
 
   const handleVerify = async () => {
     if (!fplId || !settings) return
@@ -152,7 +156,7 @@ export default function EnterPage() {
     <div className="min-h-screen flex flex-col bg-background">
       <Header platformName={settings.platform_name} hallOfFameEnabled={settings.hall_of_fame_enabled} historyVisible={settings.history_visible} />
 
-      <main className="flex-1 w-full max-w-md mx-auto px-4 py-8 sm:py-12">
+      <main className="flex-1 w-full max-w-md mx-auto px-4 py-8 sm:py-12 relative">
 
         {/* Step indicator */}
         <div className="mb-8">
@@ -165,15 +169,14 @@ export default function EnterPage() {
             <div className="card p-6 sm:p-7 space-y-5">
               <div>
                 <h2 className="font-bold text-[1.15rem] text-text-primary">Enter your FPL Team ID</h2>
-                <p className="text-sm text-text-secondary mt-1 leading-relaxed">
-                  Log in at fantasy.premierleague.com: 
-                </p>
-                <p className="text-sm text-text-secondary mt-1 leading-relaxed">
-                  Click Points → look at the URL/Link →  Use the number after '/entry/' for example:
-                </p>
-                <p className="text-sm text-text-secondary mt-1 leading-relaxed">
-                  https://fantasy.premierleague.com/entry/FPLID/event/30
-                </p>
+                <button
+                  onClick={() => setShowIdHelp(true)}
+                  className="flex items-center gap-1.5 text-sm text-brand-purple hover:underline mt-2 font-medium transition-all"
+                  type="button"
+                >
+                  <Info className="w-4 h-4" />
+                  Don&apos;t know what your FPL ID is?
+                </button>
               </div>
 
               <div className="space-y-3">
@@ -402,6 +405,64 @@ export default function EnterPage() {
             deadline={settings.entry_deadline}
             groupsAllocated={false}
           />
+        )}
+
+        {/* ── HELP MODAL ── */}
+        {showIdHelp && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300">
+            <div className="bg-background card p-6 sm:p-8 w-full max-w-md relative shadow-2xl animate-slide-up">
+              <button
+                onClick={() => setShowIdHelp(false)}
+                className="absolute top-4 right-4 p-2 text-text-secondary hover:text-text-primary bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <h3 className="font-display font-bold text-xl text-text-primary mb-6 pr-8">
+                How to find your FPL ID
+              </h3>
+              
+              <div className="space-y-6 text-sm text-text-secondary">
+                <div className="flex gap-4 items-start">
+                  <div className="w-7 h-7 rounded-full bg-brand-purple/10 text-brand-purple flex items-center justify-center font-bold shrink-0 mt-0.5">1</div>
+                  <p className="leading-relaxed">
+                    Log in to the official FPL website at <a href="https://fantasy.premierleague.com" target="_blank" rel="noopener noreferrer" className="text-brand-purple font-semibold hover:underline inline-flex items-center gap-1">fantasy.premierleague.com <ExternalLink className="w-3 h-3" /></a>.
+                  </p>
+                </div>
+                
+                <div className="flex gap-4 items-start">
+                  <div className="w-7 h-7 rounded-full bg-brand-purple/10 text-brand-purple flex items-center justify-center font-bold shrink-0 mt-0.5">2</div>
+                  <p className="leading-relaxed">
+                    Click on the <strong>Points</strong> tab in the main menu to view your team.
+                  </p>
+                </div>
+                
+                <div className="flex gap-4 items-start">
+                  <div className="w-7 h-7 rounded-full bg-brand-purple/10 text-brand-purple flex items-center justify-center font-bold shrink-0 mt-0.5">3</div>
+                  <div className="space-y-3 w-full">
+                    <p className="leading-relaxed">Look at the web address (URL) at the top of your browser. Your ID is the number directly after <strong>/entry/</strong>.</p>
+                    <div className="bg-gray-50 p-3 rounded-lg text-[13px] font-mono border border-border overflow-x-auto max-w-full">
+                      <div className="inline-block min-w-0 break-all">
+                        fantasy.premierleague.com/entry/
+                        <span className="bg-brand-purple text-white px-1.5 py-0.5 rounded font-bold shadow-sm">
+                          1234567
+                        </span>
+                        /event/...
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => setShowIdHelp(false)}
+                className="btn-primary w-full mt-8"
+              >
+                Got it, thanks!
+              </button>
+            </div>
+          </div>
         )}
 
       </main>
