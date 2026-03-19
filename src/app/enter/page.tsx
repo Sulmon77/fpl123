@@ -40,7 +40,6 @@ export default function EnterPage() {
   const [verifyErrorCode, setVerifyErrorCode] = useState<string | null>(null)
   const [joinUrl, setJoinUrl] = useState<string | null>(null)
   
-  // New state for the Help Modal
   const [showIdHelp, setShowIdHelp] = useState(false)
 
   const [manager, setManager] = useState<ResolvedManager | null>(null)
@@ -154,7 +153,12 @@ export default function EnterPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <Header platformName={settings.platform_name} hallOfFameEnabled={settings.hall_of_fame_enabled} historyVisible={settings.history_visible} />
+      <Header 
+        platformName={settings.platform_name}
+        hallOfFameEnabled={settings.hall_of_fame_enabled}
+        historyVisible={settings.history_visible}
+        registrationOpen={settings.registration_open}   // ← added this line
+      />
 
       <main className="flex-1 w-full max-w-md mx-auto px-4 py-8 sm:py-12 relative">
 
