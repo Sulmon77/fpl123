@@ -166,7 +166,13 @@ export default function EnterPage() {
               <div>
                 <h2 className="font-bold text-[1.15rem] text-text-primary">Enter your FPL Team ID</h2>
                 <p className="text-sm text-text-secondary mt-1 leading-relaxed">
-                  Find it in the FPL app: Points → tap your team name → look at the URL
+                  Log in at fantasy.premierleague.com: 
+                </p>
+                <p className="text-sm text-text-secondary mt-1 leading-relaxed">
+                  Click Points → look at the URL/Link →  Use the number after '/entry/' for example:
+                </p>
+                <p className="text-sm text-text-secondary mt-1 leading-relaxed">
+                  https://fantasy.premierleague.com/entry/FPLID/event/30
                 </p>
               </div>
 
