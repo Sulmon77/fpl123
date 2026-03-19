@@ -49,21 +49,26 @@ async function getMpesaToken(): Promise<string> {
 }
 
 // =============================================
-// Generate STK Push password
+// Generate STK Push password (FIXED TIMEZONE)
 // =============================================
 function getPassword(): { password: string; timestamp: string } {
-  const shortcode = process.env.MPESA_SHORTCODE!
+  // For Buy Goods APIs, the shortcode used for password generation is the Store Number
+  const shortcode = process.env.MPESA_SHORTCODE! 
   const passkey = process.env.MPESA_PASSKEY!
-  const timestamp = new Date()
+  
+  // Force East African Time (UTC+3) to prevent Safaricom silent drops
+  const eatOffset = 3 * 60 * 60 * 1000; 
+  const timestamp = new Date(Date.now() + eatOffset)
     .toISOString()
     .replace(/[^0-9]/g, '')
     .slice(0, 14)
+    
   const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64')
   return { password, timestamp }
 }
 
 // =============================================
-// STK Push — initiate payment
+// STK Push — initiate payment (FIXED FOR TILL NUMBER)
 // =============================================
 export async function initiateStkPush({
   phone,
@@ -84,7 +89,9 @@ export async function initiateStkPush({
 }> {
   const token = await getMpesaToken()
   const { password, timestamp } = getPassword()
-  const shortcode = process.env.MPESA_SHORTCODE!
+  
+  const storeNumber = process.env.MPESA_SHORTCODE!
+  const tillNumber = process.env.MPESA_TILL_NUMBER! // Ensure this is in your .env
   const callbackUrl = process.env.MPESA_CALLBACK_URL!
 
   logger.mpesa.info(`Initiating STK Push for ${phone} — KES ${amount}`, {
@@ -94,17 +101,17 @@ export async function initiateStkPush({
   })
 
   const body = {
-    BusinessShortCode: shortcode,
+    BusinessShortCode: storeNumber,           // Must be the Store Number
     Password: password,
     Timestamp: timestamp,
-    TransactionType: 'CustomerPayBillOnline',
+    TransactionType: 'CustomerBuyGoodsOnline', // Changed from CustomerPayBillOnline
     Amount: amount,
     PartyA: phone,
-    PartyB: shortcode,
+    PartyB: tillNumber,                       // Must be the actual Till Number
     PhoneNumber: phone,
     CallBackURL: callbackUrl,
-    AccountReference: accountReference,
-    TransactionDesc: description,
+    AccountReference: accountReference,       // Max 12 chars
+    TransactionDesc: description,             // Max 13 chars
   }
 
   const res = await fetch(`${BASE_URL}/mpesa/stkpush/v1/processrequest`, {
@@ -154,7 +161,8 @@ export async function sendB2cPayment({
   ResponseDescription: string
 }> {
   const token = await getMpesaToken()
-  const shortcode = process.env.MPESA_SHORTCODE!
+  // B2C usually uses the Store Number or a dedicated B2C shortcode
+  const shortcode = process.env.MPESA_SHORTCODE! 
   const initiator = process.env.MPESA_B2C_INITIATOR!
   const securityCredential = process.env.MPESA_B2C_SECURITY_CREDENTIAL!
   const resultUrl = process.env.MPESA_B2C_RESULT_URL!
