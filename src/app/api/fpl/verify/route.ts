@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: `You are not in the FPL123 league. Join here first: ${joinUrl}`,
+          error: `You are not in the Künamabao league. Join here first: ${joinUrl}`,
           errorCode: 'NOT_IN_LEAGUE',
           joinUrl,
         },
