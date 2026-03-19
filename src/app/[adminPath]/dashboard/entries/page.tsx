@@ -1,12 +1,12 @@
 'use client'
 // src/app/[adminPath]/dashboard/entries/page.tsx
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Search, Download, CheckCircle, XCircle, Ban, RotateCcw,
-  AlertCircle, Loader2, ChevronDown, Eye, EyeOff
+  AlertCircle, Loader2, Eye, EyeOff, UserX, ChevronDown,
 } from 'lucide-react'
-import { formatKES, timeAgo, shortId } from '@/lib/utils'
+import { formatKES, timeAgo } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
 interface Entry {
@@ -15,7 +15,7 @@ interface Entry {
   fpl_team_name: string
   manager_name: string
   gameweek_number: number
-  payment_method: 'mpesa' | 'paypal'
+  payment_method: 'mpesa' | 'paypal' | 'manual'
   payment_phone: string | null
   payment_email: string | null
   payment_status: 'pending' | 'confirmed' | 'refunded'
@@ -24,19 +24,30 @@ interface Entry {
   confirmed_at: string | null
   disqualified: boolean
   disqualified_reason: string | null
+  notes: string | null
   created_at: string
 }
 
 type FilterStatus = 'all' | 'confirmed' | 'pending' | 'refunded' | 'disqualified'
 
+interface Settings {
+  gameweek_number: number
+  entry_fee: number
+}
+
 export default function EntriesPage() {
   const [entries, setEntries] = useState<Entry[]>([])
+  const [settings, setSettings] = useState<Settings | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
-  const [filterMethod, setFilterMethod] = useState<'all' | 'mpesa' | 'paypal'>('all')
+  const [filterMethod, setFilterMethod] = useState<'all' | 'mpesa' | 'paypal' | 'manual'>('all')
+  const [filterGw, setFilterGw] = useState<'current' | 'all'>('current')
   const [showPins, setShowPins] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Modals
   const [refundModal, setRefundModal] = useState<Entry | null>(null)
@@ -44,21 +55,38 @@ export default function EntriesPage() {
   const [disqualifyReason, setDisqualifyReason] = useState('')
   const [refundAmount, setRefundAmount] = useState(0)
 
-  const fetchEntries = async () => {
+  // Refund result
+  const [refundResult, setRefundResult] = useState<{ success: boolean; message: string } | null>(null)
+
+  // Bulk action result
+  const [bulkResult, setBulkResult] = useState<string | null>(null)
+
+  const fetchData = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/entries')
-      const data = await res.json()
-      if (data.success) setEntries(data.data)
+      const [entriesRes, settingsRes] = await Promise.all([
+        fetch('/api/admin/entries'),
+        fetch('/api/admin/settings'),
+      ])
+      const entriesData = await entriesRes.json()
+      const settingsData = await settingsRes.json()
+      if (entriesData.success) setEntries(entriesData.data)
+      if (settingsData.success) setSettings(settingsData.data)
     } catch (e) {
       console.error(e)
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchEntries() }, [])
+  useEffect(() => { fetchData() }, [fetchData])
+
+  // Clear bulk selection when filters change
+  useEffect(() => { setSelectedIds(new Set()) }, [filterStatus, filterMethod, filterGw, searchQuery])
 
   const filtered = entries.filter(e => {
+    const matchGw =
+      filterGw === 'all' || e.gameweek_number === (settings?.gameweek_number ?? 0)
+
     const matchSearch =
       !searchQuery ||
       e.manager_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -71,9 +99,29 @@ export default function EntriesPage() {
 
     const matchMethod = filterMethod === 'all' || e.payment_method === filterMethod
 
-    return matchSearch && matchStatus && matchMethod
+    return matchGw && matchSearch && matchStatus && matchMethod
   })
 
+  // ── Checkbox helpers ────────────────────────────────────────────────────
+  const allSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id))
+  const someSelected = selectedIds.size > 0
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(e => e.id)))
+    }
+  }
+
+  const toggleOne = (id: string) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedIds(next)
+  }
+
+  // ── Actions ─────────────────────────────────────────────────────────────
   const handleConfirmPayment = async (entryId: string) => {
     setActionLoading(entryId)
     try {
@@ -82,7 +130,7 @@ export default function EntriesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ entryId }),
       })
-      if ((await res.json()).success) await fetchEntries()
+      if ((await res.json()).success) await fetchData()
     } finally {
       setActionLoading(null)
     }
@@ -96,7 +144,7 @@ export default function EntriesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ entryId, action: 'revoke' }),
       })
-      if ((await res.json()).success) await fetchEntries()
+      if ((await res.json()).success) await fetchData()
     } finally {
       setActionLoading(null)
     }
@@ -112,7 +160,7 @@ export default function EntriesPage() {
         body: JSON.stringify({ entryId: disqualifyModal.id, reason: disqualifyReason }),
       })
       if ((await res.json()).success) {
-        await fetchEntries()
+        await fetchData()
         setDisqualifyModal(null)
         setDisqualifyReason('')
       }
@@ -124,18 +172,72 @@ export default function EntriesPage() {
   const handleRefund = async () => {
     if (!refundModal) return
     setActionLoading(refundModal.id)
+    setRefundResult(null)
     try {
       const res = await fetch('/api/admin/refund', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          entryId: refundModal.id,
-          amount: refundAmount,
-        }),
+        body: JSON.stringify({ entryId: refundModal.id, amount: refundAmount }),
       })
-      if ((await res.json()).success) {
-        await fetchEntries()
+      const data = await res.json()
+      if (data.success) {
+        setRefundResult({ success: true, message: data.data.message })
+        await fetchData()
         setRefundModal(null)
+      } else {
+        setRefundResult({ success: false, message: data.error })
+      }
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  // Bulk: Decline (pending only)
+  const handleBulkDecline = async () => {
+    const ids = Array.from(selectedIds)
+    if (!ids.length) return
+    if (!window.confirm(`Decline ${ids.length} selected entries? Only pending entries will be deleted. Confirmed entries will be skipped.`)) return
+    setBulkResult(null)
+    setActionLoading('bulk')
+    try {
+      const res = await fetch('/api/admin/entries/decline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entryIds: ids }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setBulkResult(`✓ Declined ${data.data.declined} entries.${data.data.skipped > 0 ? ` ${data.data.skipped} skipped (not pending).` : ''}`)
+        setSelectedIds(new Set())
+        await fetchData()
+      } else {
+        setBulkResult(`✗ ${data.error}`)
+      }
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  // Bulk: Unconfirm
+  const handleBulkUnconfirm = async () => {
+    const ids = Array.from(selectedIds)
+    if (!ids.length) return
+    if (!window.confirm(`Unconfirm ${ids.length} selected entries? They will appear as pending. PINs stay active.`)) return
+    setBulkResult(null)
+    setActionLoading('bulk')
+    try {
+      const res = await fetch('/api/admin/entries/unconfirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entryIds: ids }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setBulkResult(`✓ Unconfirmed ${data.data.unconfirmed} entries.${data.data.skipped > 0 ? ` ${data.data.skipped} skipped (not confirmed).` : ''}`)
+        setSelectedIds(new Set())
+        await fetchData()
+      } else {
+        setBulkResult(`✗ ${data.error}`)
       }
     } finally {
       setActionLoading(null)
@@ -143,8 +245,9 @@ export default function EntriesPage() {
   }
 
   const exportCSV = () => {
-    const headers = ['FPL ID', 'Manager', 'Team', 'Method', 'Phone/Email', 'Status', 'Confirmed At', 'PIN']
+    const headers = ['GW', 'FPL ID', 'Manager', 'Team', 'Method', 'Phone/Email', 'Status', 'Confirmed At', 'PIN', 'Notes']
     const rows = filtered.map(e => [
+      e.gameweek_number,
       e.fpl_team_id,
       e.manager_name,
       e.fpl_team_name,
@@ -153,13 +256,14 @@ export default function EntriesPage() {
       e.payment_status,
       e.confirmed_at ?? '',
       e.pin,
+      e.notes ?? '',
     ])
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `fpl123-entries-gw.csv`
+    a.download = `fpl123-entries-gw${settings?.gameweek_number ?? ''}.csv`
     a.click()
   }
 
@@ -196,8 +300,35 @@ export default function EntriesPage() {
         </div>
       </div>
 
+      {/* Refund result banner */}
+      {refundResult && (
+        <div className={cn(
+          'flex items-start gap-2 p-4 rounded-lg border mb-4 text-sm font-medium',
+          refundResult.success
+            ? 'bg-success/5 border-success/20 text-success'
+            : 'bg-error/5 border-error/20 text-error'
+        )}>
+          {refundResult.success ? <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+          <p>{refundResult.message}</p>
+          <button onClick={() => setRefundResult(null)} className="ml-auto text-xs opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
+
+      {/* Bulk action result banner */}
+      {bulkResult && (
+        <div className={cn(
+          'flex items-center gap-2 p-4 rounded-lg border mb-4 text-sm font-medium',
+          bulkResult.startsWith('✓')
+            ? 'bg-success/5 border-success/20 text-success'
+            : 'bg-error/5 border-error/20 text-error'
+        )}>
+          <p>{bulkResult}</p>
+          <button onClick={() => setBulkResult(null)} className="ml-auto text-xs opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
+
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-5">
+      <div className="flex flex-wrap gap-3 mb-4">
         <div className="relative">
           <Search className="w-4 h-4 text-text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -209,6 +340,17 @@ export default function EntriesPage() {
           />
         </div>
 
+        {/* GW filter */}
+        <select
+          value={filterGw}
+          onChange={e => setFilterGw(e.target.value as 'current' | 'all')}
+          className="form-input w-44"
+        >
+          <option value="current">GW{settings?.gameweek_number} (Current)</option>
+          <option value="all">All Gameweeks</option>
+        </select>
+
+        {/* Status filter */}
         <select
           value={filterStatus}
           onChange={e => setFilterStatus(e.target.value as FilterStatus)}
@@ -221,16 +363,51 @@ export default function EntriesPage() {
           <option value="disqualified">Disqualified</option>
         </select>
 
+        {/* Payment method filter */}
         <select
           value={filterMethod}
-          onChange={e => setFilterMethod(e.target.value as 'all' | 'mpesa' | 'paypal')}
+          onChange={e => setFilterMethod(e.target.value as 'all' | 'mpesa' | 'paypal' | 'manual')}
           className="form-input w-36"
         >
           <option value="all">All Methods</option>
           <option value="mpesa">M-Pesa</option>
           <option value="paypal">PayPal</option>
+          <option value="manual">Manual</option>
         </select>
       </div>
+
+      {/* Bulk action bar — shown when items selected */}
+      {someSelected && (
+        <div className="flex items-center gap-3 bg-brand-purple/5 border border-brand-purple/20 rounded-lg px-4 py-2.5 mb-4">
+          <span className="text-sm font-semibold text-brand-purple">
+            {selectedIds.size} selected
+          </span>
+          <div className="flex gap-2 ml-2">
+            <button
+              onClick={handleBulkDecline}
+              disabled={actionLoading === 'bulk'}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-error/10 text-error rounded-lg hover:bg-error/20 disabled:opacity-50"
+            >
+              {actionLoading === 'bulk' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserX className="w-3.5 h-3.5" />}
+              Decline Selected
+            </button>
+            <button
+              onClick={handleBulkUnconfirm}
+              disabled={actionLoading === 'bulk'}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-warning/10 text-warning rounded-lg hover:bg-warning/20 disabled:opacity-50"
+            >
+              {actionLoading === 'bulk' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+              Unconfirm Selected
+            </button>
+          </div>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="ml-auto text-xs text-text-secondary hover:text-text-primary"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="card overflow-hidden">
@@ -238,29 +415,66 @@ export default function EntriesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-border">
+                {/* Select all checkbox */}
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="w-4 h-4 accent-brand-purple cursor-pointer"
+                  />
+                </th>
                 <th className="text-left px-4 py-3 font-semibold text-text-secondary text-xs uppercase tracking-wide">Manager</th>
                 <th className="text-left px-4 py-3 font-semibold text-text-secondary text-xs uppercase tracking-wide">FPL ID</th>
+                <th className="text-left px-4 py-3 font-semibold text-text-secondary text-xs uppercase tracking-wide">GW</th>
                 <th className="text-left px-4 py-3 font-semibold text-text-secondary text-xs uppercase tracking-wide">Method</th>
                 <th className="text-left px-4 py-3 font-semibold text-text-secondary text-xs uppercase tracking-wide">Contact</th>
                 <th className="text-left px-4 py-3 font-semibold text-text-secondary text-xs uppercase tracking-wide">Status</th>
-                {showPins && <th className="text-left px-4 py-3 font-semibold text-text-secondary text-xs uppercase tracking-wide">PIN</th>}
+                {showPins && (
+                  <th className="text-left px-4 py-3 font-semibold text-text-secondary text-xs uppercase tracking-wide">PIN</th>
+                )}
                 <th className="text-left px-4 py-3 font-semibold text-text-secondary text-xs uppercase tracking-wide">When</th>
                 <th className="text-right px-4 py-3 font-semibold text-text-secondary text-xs uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.map(entry => (
-                <tr key={entry.id} className={cn('hover:bg-gray-50', entry.disqualified && 'opacity-60')}>
+                <tr
+                  key={entry.id}
+                  className={cn(
+                    'hover:bg-gray-50',
+                    entry.disqualified && 'opacity-60',
+                    selectedIds.has(entry.id) && 'bg-brand-purple/5'
+                  )}
+                >
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(entry.id)}
+                      onChange={() => toggleOne(entry.id)}
+                      className="w-4 h-4 accent-brand-purple cursor-pointer"
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-text-primary">{entry.manager_name}</div>
                     <div className="text-xs text-text-secondary">{entry.fpl_team_name}</div>
+                    {entry.notes && (
+                      <div className="text-xs text-orange-500 mt-0.5">{entry.notes}</div>
+                    )}
                   </td>
                   <td className="px-4 py-3 font-mono text-sm text-text-secondary">
                     {entry.fpl_team_id}
                   </td>
+                  <td className="px-4 py-3 text-sm text-text-secondary font-medium">
+                    GW{entry.gameweek_number}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="text-xs font-medium">
-                      {entry.payment_method === 'mpesa' ? '📱 M-Pesa' : '💳 PayPal'}
+                      {entry.payment_method === 'mpesa'
+                        ? '📱 M-Pesa'
+                        : entry.payment_method === 'paypal'
+                        ? '💳 PayPal'
+                        : '🤝 Manual'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-secondary">
@@ -283,13 +497,25 @@ export default function EntriesPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       {entry.payment_status === 'pending' && (
-                        <ActionButton
-                          onClick={() => handleConfirmPayment(entry.id)}
-                          loading={actionLoading === entry.id}
-                          icon={<CheckCircle className="w-3.5 h-3.5" />}
-                          label="Confirm"
-                          color="text-success"
-                        />
+                        <>
+                          <ActionButton
+                            onClick={() => handleConfirmPayment(entry.id)}
+                            loading={actionLoading === entry.id}
+                            icon={<CheckCircle className="w-3.5 h-3.5" />}
+                            label="Confirm"
+                            color="text-success"
+                          />
+                          <ActionButton
+                            onClick={() => {
+                              setSelectedIds(new Set([entry.id]))
+                              handleBulkDecline()
+                            }}
+                            loading={actionLoading === entry.id || actionLoading === 'bulk'}
+                            icon={<UserX className="w-3.5 h-3.5" />}
+                            label="Decline"
+                            color="text-error"
+                          />
+                        </>
                       )}
                       {entry.payment_status === 'confirmed' && !entry.disqualified && (
                         <>
@@ -303,7 +529,7 @@ export default function EntriesPage() {
                           <ActionButton
                             onClick={() => {
                               setRefundModal(entry)
-                              setRefundAmount(200) // TODO: get from settings
+                              setRefundAmount(settings?.entry_fee ?? 200)
                             }}
                             loading={actionLoading === entry.id}
                             icon={<RotateCcw className="w-3.5 h-3.5" />}
@@ -381,13 +607,27 @@ export default function EntriesPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-text-secondary">Payment Method</span>
-                <span>{refundModal.payment_method === 'mpesa' ? '📱 M-Pesa' : '💳 PayPal'}</span>
+                <span>
+                  {refundModal.payment_method === 'mpesa'
+                    ? '📱 M-Pesa'
+                    : refundModal.payment_method === 'paypal'
+                    ? '💳 PayPal'
+                    : '🤝 Manual'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-text-secondary">Send To</span>
-                <span className="font-mono text-xs">{refundModal.payment_phone || refundModal.payment_email}</span>
+                <span className="font-mono text-xs">
+                  {refundModal.payment_phone || refundModal.payment_email || 'N/A'}
+                </span>
               </div>
             </div>
+
+            {refundModal.payment_method === 'manual' && (
+              <div className="bg-warning/5 border border-warning/20 rounded-lg p-3 text-xs text-warning font-medium">
+                This is a manual entry. No automatic refund will be sent — the entry will simply be removed from the system.
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-semibold text-text-secondary mb-1.5">
@@ -423,20 +663,13 @@ export default function EntriesPage() {
   )
 }
 
-function StatusBadge({
-  status,
-  pinActive,
-}: {
-  status: string
-  pinActive?: boolean
-}) {
+function StatusBadge({ status, pinActive }: { status: string; pinActive?: boolean }) {
   const styles: Record<string, string> = {
     confirmed: 'bg-success/10 text-success',
     pending: 'bg-warning/10 text-warning',
     refunded: 'bg-blue-100 text-blue-700',
     disqualified: 'bg-error/10 text-error',
   }
-
   return (
     <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${styles[status] ?? 'bg-gray-100 text-gray-600'}`}>
       {status}
@@ -447,13 +680,7 @@ function StatusBadge({
   )
 }
 
-function ActionButton({
-  onClick,
-  loading,
-  icon,
-  label,
-  color,
-}: {
+function ActionButton({ onClick, loading, icon, label, color }: {
   onClick: () => void
   loading: boolean
   icon: React.ReactNode
@@ -473,11 +700,7 @@ function ActionButton({
   )
 }
 
-function Modal({
-  title,
-  children,
-  onClose,
-}: {
+function Modal({ title, children, onClose }: {
   title: string
   children: React.ReactNode
   onClose: () => void

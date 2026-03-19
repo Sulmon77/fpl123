@@ -3,7 +3,6 @@
 // Multi-step entry flow: FPL ID → Confirm Manager → Payment → Confirmation
 
 import { useState, useEffect, useRef } from 'react'
-import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { StepIndicator } from '@/components/entry/StepIndicator'
@@ -36,33 +35,33 @@ export default function EnterPage() {
 
   const [fplId, setFplId] = useState('')
   const [verifying, setVerifying] = useState(false)
-  const [verifyError, setVerifyError] = useState<string | null>(null)
+  const[verifyError, setVerifyError] = useState<string | null>(null)
   const [verifyErrorCode, setVerifyErrorCode] = useState<string | null>(null)
   const [joinUrl, setJoinUrl] = useState<string | null>(null)
 
   const [manager, setManager] = useState<ResolvedManager | null>(null)
 
   const [entryId, setEntryId] = useState<string | null>(null)
-  const [paymentMethod, setPaymentMethod] = useState<'mpesa' | 'paypal'>('mpesa')
-  const [phone, setPhone] = useState('')
+  const[paymentMethod, setPaymentMethod] = useState<'mpesa' | 'paypal'>('mpesa')
+  const[phone, setPhone] = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [registering, setRegistering] = useState(false)
-  const [paymentInitiated, setPaymentInitiated] = useState(false)
+  const[paymentInitiated, setPaymentInitiated] = useState(false)
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'pending' | 'confirmed' | 'failed'>('idle')
-  const [paymentMessage, setPaymentMessage] = useState('')
+  const[paymentMessage, setPaymentMessage] = useState('')
   const [checkoutRequestId, setCheckoutRequestId] = useState<string | null>(null)
   const [paypalError, setPaypalError] = useState<string | null>(null)
 
   const [pin, setPin] = useState<string | null>(null)
-  const [confirmedManager, setConfirmedManager] = useState<{ name: string; team: string; gw: number } | null>(null)
+  const[confirmedManager, setConfirmedManager] = useState<{ name: string; team: string; gw: number } | null>(null)
 
   const pollRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(d => { if (d.success) setSettings(d.data) }).catch(console.error)
-  }, [])
+  },[])
 
-  useEffect(() => { return () => { if (pollRef.current) clearInterval(pollRef.current) } }, [])
+  useEffect(() => { return () => { if (pollRef.current) clearInterval(pollRef.current) } },[])
 
   const handleVerify = async () => {
     if (!fplId || !settings) return
@@ -141,11 +140,6 @@ export default function EnterPage() {
     }, 5000)
   }
 
-  const ensureEntryId = async (): Promise<string | null> => {
-    if (entryId) return entryId
-    return await handleRegister()
-  }
-
   if (!settings) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -153,8 +147,6 @@ export default function EnterPage() {
       </div>
     )
   }
-
-  const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? ''
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -263,7 +255,16 @@ export default function EnterPage() {
                           : 'border-border text-text-secondary hover:border-gray-300 hover:bg-gray-50/50'
                       )}
                     >
-                      {method === 'mpesa' ? '📱 M-Pesa' : '💳 PayPal'}
+                      {method === 'mpesa' ? (
+                        '📱 M-Pesa'
+                      ) : (
+                        <>
+                          💳 PayPal
+                          <span className="ml-1.5 text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full font-normal">
+                            Coming soon
+                          </span>
+                        </>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -334,68 +335,21 @@ export default function EnterPage() {
 
               {/* PayPal */}
               {paymentMethod === 'paypal' && (
-                <div className="space-y-3">
-                  {!termsAccepted ? (
-                    <div className="flex items-center gap-2.5 bg-warning/[0.06] border border-warning/20 rounded-xl p-3.5">
-                      <AlertCircle className="w-4 h-4 text-warning flex-shrink-0" />
-                      <p className="text-sm text-warning font-medium">Accept the Terms below to continue</p>
-                    </div>
-                  ) : (
-                    <>
-                      {paypalError && (
-                        <div className="flex items-start gap-2.5 bg-error/[0.06] border border-error/20 rounded-xl p-3.5">
-                          <XCircle className="w-4 h-4 text-error flex-shrink-0 mt-0.5" />
-                          <p className="text-sm text-error">{paypalError}</p>
-                        </div>
-                      )}
-                      {paypalClientId ? (
-                        <PayPalScriptProvider options={{ clientId: paypalClientId, currency: 'USD' }}>
-                          <PayPalButtons
-                            style={{ layout: 'vertical', color: 'blue', shape: 'rect' }}
-                            disabled={registering}
-                            createOrder={async () => {
-                              try {
-                                const eid = await ensureEntryId()
-                                if (!eid) throw new Error('Failed to create entry')
-                                const res = await fetch('/api/paypal/create-order', {
-                                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ entryId: eid }),
-                                })
-                                const data = await res.json()
-                                if (!data.success) throw new Error(data.error)
-                                return data.data.orderId
-                              } catch (err) {
-                                setPaypalError('Failed to start PayPal payment. Please try again.')
-                                throw err
-                              }
-                            }}
-                            onApprove={async (data) => {
-                              try {
-                                const eid = entryId
-                                if (!eid) throw new Error('No entry ID')
-                                const res = await fetch('/api/paypal/capture-order', {
-                                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ orderId: data.orderID, entryId: eid }),
-                                })
-                                const result = await res.json()
-                                if (!result.success) throw new Error(result.error)
-                                const { pin: entryPin, managerName, fplTeamName, gameweekNumber } = result.data
-                                setPin(entryPin); setConfirmedManager({ name: managerName, team: fplTeamName, gw: gameweekNumber }); setStep(4)
-                              } catch {
-                                setPaypalError('Payment approved but confirmation failed. Contact admin with your PayPal receipt.')
-                              }
-                            }}
-                            onError={() => { setPaypalError('PayPal payment failed. Please try again or use M-Pesa.') }}
-                          />
-                        </PayPalScriptProvider>
-                      ) : (
-                        <div className="flex items-center gap-2.5 bg-error/[0.06] border border-error/20 rounded-xl p-3.5">
-                          <AlertCircle className="w-4 h-4 text-error" />
-                          <p className="text-sm text-error">PayPal not configured. Please use M-Pesa.</p>
-                        </div>
-                      )}
-                    </>
-                  )}
+                <div className="rounded-2xl border-2 border-dashed border-gray-200 p-8 text-center">
+                  <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-3">
+                    <span className="text-2xl">💳</span>
+                  </div>
+                  <h3 className="font-bold text-text-primary mb-1">PayPal Coming Soon</h3>
+                  <p className="text-sm text-text-secondary max-w-xs mx-auto mb-4">
+                    PayPal payments are not available yet. Please use M-Pesa to enter this gameweek.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('mpesa')}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-brand-purple text-white text-sm font-semibold rounded-lg hover:bg-opacity-90"
+                  >
+                    Switch to M-Pesa
+                  </button>
                 </div>
               )}
 

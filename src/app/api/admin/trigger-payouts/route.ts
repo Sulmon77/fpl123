@@ -14,7 +14,10 @@ export async function POST(request: NextRequest) {
   const auth = requireAdminAuth(request)
   if (!auth.authorized) return auth.response!
 
-  const { payoutIds } = await request.json() // optional: specific payout IDs, else process all pending
+// Safely parse the body since the frontend might send an empty request
+  const bodyText = await request.text()
+  const body = bodyText ? JSON.parse(bodyText) : {}
+  const payoutIds = body.payoutIds ||[] // Added the empty array fallback!
 
   const supabase = createServerSupabaseClient()
 

@@ -116,7 +116,7 @@ export function Footer({ whatsapp, instagram, tiktok, email, facebook, x, platfo
           <div className="w-full max-w-sm border-t border-white/[0.08] pt-8 flex items-center justify-center gap-6 flex-wrap">
             {[
               { href: '/terms', label: 'Terms' },
-              { href: '/enter', label: 'Enter' },
+              /*{ href: '/enter', label: 'Enter' },*/
               { href: '/standings', label: 'Standings' },
             ].map(({ href, label }) => (
               <Link

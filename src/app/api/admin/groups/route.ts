@@ -8,7 +8,11 @@ export async function GET(request: NextRequest) {
   if (!auth.authorized) return auth.response!
 
   const supabase = createServerSupabaseClient()
-  const { data: settings } = await supabase.from('settings').select('gameweek_number').single()
+
+  const { data: settings } = await supabase
+    .from('settings')
+    .select('gameweek_number')
+    .single()
 
   const { data, error } = await supabase
     .from('groups')
@@ -22,6 +26,17 @@ export async function GET(request: NextRequest) {
     .eq('gameweek_number', settings?.gameweek_number ?? 1)
     .order('group_number')
 
-  if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 })
-  return NextResponse.json({ success: true, data })
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  }
+
+  // Add member_count to each group so the User Management page
+  // can show "Group X (Y/32 members)" without a separate query.
+  // All existing callers still receive every field they had before.
+  const enriched = (data ?? []).map(group => ({
+    ...group,
+    member_count: Array.isArray(group.group_members) ? group.group_members.length : 0,
+  }))
+
+  return NextResponse.json({ success: true, data: enriched })
 }

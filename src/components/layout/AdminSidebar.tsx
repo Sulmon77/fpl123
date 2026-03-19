@@ -5,25 +5,26 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
-  LayoutDashboard, Settings, Users, Layers, BarChart2,
+  LayoutDashboard, Settings, Users, Users2, Layers, BarChart2,
   DollarSign, Megaphone, Trophy, History, Ban, FileText,
   Wrench, ChevronLeft, ChevronRight, Zap, LogOut, Menu, X
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
-  { href: 'dashboard',      icon: LayoutDashboard, label: 'Dashboard' },
-  { href: 'gw-controls',   icon: Settings,         label: 'GW Controls' },
-  { href: 'entries',        icon: Users,            label: 'Entries & Payments' },
-  { href: 'groups',         icon: Layers,           label: 'Group Management' },
-  { href: 'standings',      icon: BarChart2,        label: 'Standings & Points' },
-  { href: 'payouts',        icon: DollarSign,       label: 'Payouts' },
-  { href: 'announcements',  icon: Megaphone,        label: 'Announcements' },
-  { href: 'hall-of-fame',   icon: Trophy,           label: 'Hall of Fame' },
-  { href: 'history',        icon: History,          label: 'History' },
-  { href: 'blacklist',      icon: Ban,              label: 'Blacklist' },
-  { href: 'terms',          icon: FileText,         label: 'Terms & Conditions' },
-  { href: 'settings',       icon: Wrench,           label: 'Platform Settings' },
+  { href: 'dashboard',         icon: LayoutDashboard, label: 'Dashboard' },
+  { href: 'gw-controls',       icon: Settings,        label: 'GW Controls' },
+  { href: 'entries',           icon: Users,           label: 'Entries & Payments' },
+  { href: 'user-management',   icon: Users2,          label: 'User Management' },
+  { href: 'groups',            icon: Layers,          label: 'Group Management' },
+  { href: 'standings',         icon: BarChart2,       label: 'Standings & Points' },
+  { href: 'payouts',           icon: DollarSign,      label: 'Payouts' },
+  { href: 'announcements',     icon: Megaphone,       label: 'Announcements' },
+  { href: 'hall-of-fame',      icon: Trophy,          label: 'Hall of Fame' },
+  { href: 'history',           icon: History,         label: 'History' },
+  { href: 'blacklist',         icon: Ban,             label: 'Blacklist' },
+  { href: 'terms',             icon: FileText,        label: 'Terms & Conditions' },
+  { href: 'settings',          icon: Wrench,          label: 'Platform Settings' },
 ]
 
 interface AdminSidebarProps {
@@ -35,13 +36,11 @@ export function AdminSidebar({ adminPath }: AdminSidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Build the full link href for each nav item
   const getLinkHref = (href: string) =>
     href === 'dashboard'
       ? `/${adminPath}/dashboard`
       : `/${adminPath}/dashboard/${href}`
 
-  // Active detection: exact match for dashboard, prefix match for all sub-pages
   const isActive = (href: string) => {
     const fullHref = getLinkHref(href)
     if (href === 'dashboard') {
