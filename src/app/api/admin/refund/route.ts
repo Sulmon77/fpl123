@@ -57,9 +57,7 @@ export async function POST(request: NextRequest) {
     }, { status: 400 })
   }
 
-  logger.info(`Refunding entry ${entryId} for ${entry.manager_name} via ${entry.payment_method}`, {
-    file: 'src/app/api/admin/refund/route.ts',
-  })
+  logger.info(`Refunding entry ${entryId} for ${entry.manager_name} via ${entry.payment_method}`)
 
   // ── Step 1: Send the money back ─────────────────────────────────────────
   let refundReference = ''
@@ -103,9 +101,7 @@ export async function POST(request: NextRequest) {
       refundReference = 'manual-no-payment'
     }
   } catch (err) {
-    logger.error(`Refund payment failed for ${entryId}: ${String(err)}`, {
-      file: 'src/app/api/admin/refund/route.ts',
-    })
+    logger.error(`Refund payment failed for ${entryId}: ${String(err)}`)
     return NextResponse.json({
       success: false,
       error: `Payment refund failed: ${String(err)}. No changes were made. Please check your M-Pesa/PayPal credentials.`,
@@ -127,18 +123,14 @@ export async function POST(request: NextRequest) {
 
   if (deleteError) {
     // Money was sent but DB cleanup failed — log this clearly
-    logger.error(`CRITICAL: Refund payment sent (ref: ${refundReference}) but entry deletion failed: ${deleteError.message}`, {
-      file: 'src/app/api/admin/refund/route.ts',
-    })
+    logger.error(`CRITICAL: Refund payment sent (ref: ${refundReference}) but entry deletion failed: ${deleteError.message}`)
     return NextResponse.json({
       success: false,
       error: `Refund was sent successfully (ref: ${refundReference}), but the entry could not be removed from the database. Please delete entry ${entryId} manually from Supabase.`,
     }, { status: 500 })
   }
 
-  logger.info(`Refund complete for ${entry.manager_name}. Ref: ${refundReference}`, {
-    file: 'src/app/api/admin/refund/route.ts',
-  })
+  logger.info(`Refund complete for ${entry.manager_name}. Ref: ${refundReference}`)
 
   return NextResponse.json({
     success: true,
