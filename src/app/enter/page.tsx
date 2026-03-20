@@ -361,7 +361,7 @@ export default function EnterPage() {
                         </div>
                         <div>
                           <p className="font-display font-bold text-white text-xl leading-tight">Elite</p>
-                          <p className="text-white/50 text-xs mt-0.5">Experience Managers</p>
+                          <p className="text-white/50 text-xs mt-0.5">Experienced Managers</p>
                         </div>
                       </div>
                       <div className="text-right">
