@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const supabase = createServerSupabaseClient()
 
-    // Only allow known fields
     const allowed = [
       'gameweek_number', 'entry_fee', 'registration_open', 'giveaway_type',
       'giveaway_description', 'winners_per_group', 'payout_percentages',
@@ -38,6 +37,8 @@ export async function POST(request: NextRequest) {
       'hall_of_fame_audience', 'announcement_text', 'announcement_visible',
       'terms_text', 'platform_name', 'history_visible', 'gameweek_status',
       'gameweek_ended', 'entry_deadline',
+      // Tier settings
+      'casual_settings', 'elite_settings',
     ]
 
     const update: Record<string, unknown> = {}
@@ -47,7 +48,10 @@ export async function POST(request: NextRequest) {
 
     update.updated_at = new Date().toISOString()
 
-    const { error } = await supabase.from('settings').update(update).neq('id', '00000000-0000-0000-0000-000000000000') // update the single row
+    const { error } = await supabase
+      .from('settings')
+      .update(update)
+      .neq('id', '00000000-0000-0000-0000-000000000000')
 
     if (error) {
       logger.db.error(`Failed to update settings: ${error.message}`, {

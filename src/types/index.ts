@@ -2,19 +2,51 @@
 // All TypeScript interfaces for FPL123
 
 // =============================================
+// TIER TYPES
+// =============================================
+
+export type EntryTier = 'casual' | 'elite'
+
+export interface TierSettings {
+  entry_fee: number
+  max_group_size: number
+  winners_per_group: number
+  payout_percentages: PayoutPercentages
+  enabled: boolean
+}
+
+export const DEFAULT_CASUAL_SETTINGS: TierSettings = {
+  entry_fee: 200,
+  max_group_size: 16,
+  winners_per_group: 1,
+  payout_percentages: { '1': 90, platform: 10 },
+  enabled: true,
+}
+
+export const DEFAULT_ELITE_SETTINGS: TierSettings = {
+  entry_fee: 1000,
+  max_group_size: 8,
+  winners_per_group: 2,
+  payout_percentages: { '1': 60, '2': 30, platform: 10 },
+  enabled: true,
+}
+
+// =============================================
 // DATABASE TYPES
 // =============================================
 
 export interface Settings {
   id: string
   gameweek_number: number
-  entry_fee: number
+  entry_fee: number                   // legacy — kept for backward compat
   entry_deadline: string | null
   registration_open: boolean
   giveaway_type: 'money' | 'shoutout' | 'other'
   giveaway_description: string | null
-  winners_per_group: number
-  payout_percentages: PayoutPercentages
+  winners_per_group: number           // legacy — kept for backward compat
+  payout_percentages: PayoutPercentages  // legacy
+  casual_settings: TierSettings
+  elite_settings: TierSettings
   hall_of_fame_enabled: boolean
   hall_of_fame_price: number
   hall_of_fame_audience: 'all' | 'registered'
@@ -22,8 +54,11 @@ export interface Settings {
   announcement_text: string | null
   announcement_visible: boolean
   terms_text: string
+  rules_text: string | null            // legacy plain text — replaced by rules table
   platform_name: string
   history_visible: boolean
+  gameweek_ended: boolean
+  gameweek_status: 'upcoming' | 'ongoing' | 'ended' | 'edit'
   updated_at: string
 }
 
@@ -37,7 +72,8 @@ export interface Entry {
   fpl_team_name: string
   manager_name: string
   gameweek_number: number
-  payment_method: 'mpesa' | 'paypal'
+  entry_tier: EntryTier
+  payment_method: 'mpesa' | 'paypal' | 'manual'
   payment_phone: string | null
   payment_email: string | null
   payment_reference: string | null
@@ -49,6 +85,7 @@ export interface Entry {
   hall_of_fame_paid_at: string | null
   disqualified: boolean
   disqualified_reason: string | null
+  notes: string | null
   created_at: string
 }
 
@@ -56,6 +93,7 @@ export interface Group {
   id: string
   gameweek_number: number
   group_number: number
+  entry_tier: EntryTier
   allocated_at: string
 }
 
@@ -66,6 +104,7 @@ export interface GroupMember {
   fpl_team_name: string
   manager_name: string
   gameweek_number: number
+  entry_tier: EntryTier
   gw_points: number
   transfer_hits: number
   chip_used: 'wildcard' | 'freehit' | 'bboost' | '3xc' | null
@@ -76,13 +115,17 @@ export interface GroupMember {
 
 export interface GroupWithMembers extends Group {
   group_members: GroupMember[]
+  member_count: number
 }
 
 export interface Payout {
   id: string
   gameweek_number: number
   fpl_team_id: number
+  fpl_team_name: string | null
   manager_name: string
+  group_number: number | null
+  entry_tier: EntryTier
   position: number
   amount: number
   payment_method: 'mpesa' | 'paypal'
@@ -90,6 +133,8 @@ export interface Payout {
   status: 'pending' | 'sent' | 'failed'
   triggered_at: string | null
   completed_at: string | null
+  marked_sent_at: string | null
+  marked_sent_by: string | null
   mpesa_transaction_id: string | null
   notes: string | null
 }
@@ -102,6 +147,8 @@ export interface GiveawayHistory {
   winners: GiveawayWinner[] | null
   announced_at: string
   visible_to_public: boolean
+  total_entries: number
+  total_amount: number
 }
 
 export interface GiveawayWinner {
@@ -109,6 +156,7 @@ export interface GiveawayWinner {
   manager_name: string
   fpl_team_name: string
   group_number: number
+  entry_tier: EntryTier
   position: number
   gw_points: number
   prize_amount?: number
@@ -145,6 +193,14 @@ export interface HallOfFamePayment {
   payment_reference: string | null
   paid_at: string
   access_expires_at: string | null
+}
+
+export interface Rule {
+  id: string
+  title: string
+  body: string
+  sort_order: number
+  created_at: string
 }
 
 // =============================================
@@ -184,7 +240,7 @@ export interface FplEntry {
   player_first_name: string
   player_last_name: string
   player_region_name: string
-  name: string // team name
+  name: string
   summary_overall_points: number
   summary_overall_rank: number
   summary_event_points: number
@@ -239,10 +295,7 @@ export interface FplPick {
 }
 
 export interface FplLeagueStandings {
-  league: {
-    id: number
-    name: string
-  }
+  league: { id: number; name: string }
   standings: {
     has_next: boolean
     page: number
@@ -262,7 +315,6 @@ export interface FplLeagueEntry {
   entry_name: string
 }
 
-// Resolved manager details (combined from FPL API calls)
 export interface ResolvedManager {
   fpl_team_id: number
   manager_name: string
@@ -270,7 +322,7 @@ export interface ResolvedManager {
   overall_rank: number
   overall_points: number
   last_gw_points: number
-  transfer_hits: number // cost in points (e.g. 4, 8)
+  transfer_hits: number
   chip_used: 'wildcard' | 'freehit' | 'bboost' | '3xc' | null
 }
 
@@ -298,6 +350,7 @@ export interface RegisterEntryRequest {
   fplTeamName: string
   managerName: string
   gameweekNumber: number
+  entryTier: EntryTier
   paymentMethod: 'mpesa' | 'paypal'
   paymentPhone?: string
   paymentEmail?: string
@@ -360,6 +413,7 @@ export interface PayoutPreview {
 
 export interface PayoutWinner {
   groupNumber: number
+  entry_tier: EntryTier
   position: number
   fplTeamId: number
   managerName: string
@@ -376,7 +430,7 @@ export interface PayoutWinner {
 // UI STATE TYPES
 // =============================================
 
-export type EntryStep = 1 | 2 | 3 | 4
+export type EntryStep = 1 | 2 | 3 | 4 | 5
 
 export interface EntryFlowState {
   step: EntryStep
@@ -384,6 +438,7 @@ export interface EntryFlowState {
   manager: ResolvedManager | null
   entryId: string | null
   pin: string | null
+  entryTier: EntryTier | null
   paymentMethod: 'mpesa' | 'paypal'
   paymentStatus: 'idle' | 'pending' | 'confirmed' | 'failed'
   checkoutRequestId: string | null
@@ -404,7 +459,7 @@ export interface AdminStats {
   totalEntries: number
   confirmedEntries: number
   pendingEntries: number
-  totalRevenuKes: number
+  totalRevenueKes: number
   groupsAllocated: number
   currentGw: number
   registrationOpen: boolean

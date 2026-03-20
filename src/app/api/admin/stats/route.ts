@@ -9,28 +9,35 @@ export async function GET(request: NextRequest) {
 
   const supabase = createServerSupabaseClient()
 
-  const [settingsRes, entriesRes, groupsRes] = await Promise.all([
-    supabase.from('settings').select('gameweek_number, entry_fee, registration_open, entry_deadline').single(),
-    supabase.from('entries').select('id, payment_status'),
-    supabase.from('groups').select('id'),
-  ])
+  const { data: settings } = await supabase
+    .from('settings')
+    .select('gameweek_number')
+    .single()
 
-  const settings = settingsRes.data
-  const entries = entriesRes.data ?? []
-  const confirmed = entries.filter(e => e.payment_status === 'confirmed')
-  const pending = entries.filter(e => e.payment_status === 'pending')
+  const currentGw = settings?.gameweek_number ?? 1
+
+  // All confirmed, non-disqualified entries for current GW
+  const { data: entries } = await supabase
+    .from('entries')
+    .select('id, payment_status, entry_tier, disqualified')
+    .eq('gameweek_number', currentGw)
+
+  const allEntries = entries ?? []
+  const confirmedEntries = allEntries.filter(
+    e => e.payment_status === 'confirmed' && !e.disqualified
+  )
+
+  const casualEntries = confirmedEntries.filter(e => e.entry_tier === 'casual').length
+  const eliteEntries = confirmedEntries.filter(e => e.entry_tier === 'elite').length
 
   return NextResponse.json({
     success: true,
     data: {
-      totalEntries: entries.length,
-      confirmedEntries: confirmed.length,
-      pendingEntries: pending.length,
-      totalRevenueKes: confirmed.length * (settings?.entry_fee ?? 200),
-      groupsAllocated: groupsRes.data?.length ?? 0,
-      currentGw: settings?.gameweek_number,
-      registrationOpen: settings?.registration_open,
-      deadline: settings?.entry_deadline,
+      confirmedEntries: confirmedEntries.length,
+      pendingEntries: allEntries.filter(e => e.payment_status === 'pending').length,
+      casualEntries,
+      eliteEntries,
+      currentGw,
     },
   })
 }

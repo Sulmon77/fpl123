@@ -7,7 +7,8 @@ import { AnnouncementBanner } from '@/components/shared/AnnouncementBanner'
 import { CountdownTimer } from '@/components/shared/CountdownTimer'
 import { formatKES, formatDeadline, isDeadlinePassed } from '@/lib/utils'
 import Link from 'next/link'
-import { Zap, Users, Trophy, ChevronRight, ArrowRight, Shield } from 'lucide-react'
+import { Zap, Users, Trophy, ChevronRight, ArrowRight, Shield, BookOpen } from 'lucide-react'
+import type { TierSettings } from '@/types'
 
 export const revalidate = 30
 
@@ -27,6 +28,10 @@ export default async function HomePage() {
 
   type GwStatus = 'upcoming' | 'ongoing' | 'ended' | 'edit'
   const gwStatus: GwStatus = (settings?.gameweek_status as GwStatus) ?? 'upcoming'
+
+  const casualSettings = settings?.casual_settings as TierSettings | undefined
+  const eliteSettings = settings?.elite_settings as TierSettings | undefined
+  const casualFee = casualSettings?.entry_fee ?? 200
 
   const statusConfig: Record<GwStatus, {
     badge: string; dot: string; badgeBg: string;
@@ -72,7 +77,6 @@ export default async function HomePage() {
   }
 
   const sc = statusConfig[gwStatus]
-
   const fplLeagueUrl = process.env.FPL_LEAGUE_JOIN_URL ?? 'https://fantasy.premierleague.com/leagues/auto-join/oly4ih'
 
   const contactInfo = {
@@ -83,13 +87,6 @@ export default async function HomePage() {
     facebook: process.env.CONTACT_FACEBOOK,
     x: process.env.CONTACT_X,
   }
-
-  // Prize data
-  const payoutPcts = settings?.payout_percentages ?? {}
-  const entryFee = settings?.entry_fee ?? 200
-  const platformCut = payoutPcts.platform ?? 10
-  const pot32 = entryFee * 32
-  const distributable = Math.floor(pot32 * (1 - platformCut / 100))
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -107,20 +104,12 @@ export default async function HomePage() {
 
       <main className="flex-1">
 
-        {/* ─── HERO ──────────────────────────────────────────────── */}
+        {/* ─── HERO ── */}
         <section className="relative overflow-hidden bg-brand-purple text-white min-h-[88svh] flex items-center">
-
-          {/* Background layers */}
           <div className="absolute inset-0 pointer-events-none select-none">
-            {/* Dot grid */}
-            <div className="absolute inset-0 opacity-[0.06]" style={{
-              backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.8) 1px, transparent 1px)`,
-              backgroundSize: '28px 28px',
-            }} />
-            {/* Glow orbs */}
+            <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.8) 1px, transparent 1px)`, backgroundSize: '28px 28px' }} />
             <div className="absolute -top-32 -right-32 w-[600px] h-[600px] rounded-full bg-brand-green/[0.06] blur-[120px]" />
             <div className="absolute bottom-0 -left-32 w-[500px] h-[500px] rounded-full bg-brand-cyan/[0.04] blur-[100px]" />
-            {/* Bottom fade */}
             <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-background to-transparent" />
           </div>
 
@@ -133,7 +122,6 @@ export default async function HomePage() {
                 <span className="text-[13px] font-bold tracking-wide">{sc.badge}</span>
               </div>
 
-              {/* Headline */}
               <h1 className="font-display font-bold text-[2.6rem] sm:text-[3.5rem] lg:text-[4.2rem] leading-[1.05] mb-5 animate-slide-up">
                 Prove Your FPL{' '}
                 <span className="text-brand-green">Edge</span>
@@ -142,7 +130,7 @@ export default async function HomePage() {
               </h1>
 
               <p className="text-white/50 text-[1.05rem] sm:text-lg mb-10 max-w-md leading-relaxed animate-slide-up delay-75">
-                A small private circle of serious FPL managers. The best get recognised and paid — straight to M-Pesa or PayPal.
+                A small private circle of serious FPL managers. The best get recognised and paid — straight to M-Pesa.
               </p>
 
               {/* Countdown */}
@@ -155,7 +143,6 @@ export default async function HomePage() {
                 </div>
               )}
 
-              {/* Edit mode notice */}
               {sc.showEditNotice && (
                 <div className="mb-10 flex items-center gap-3 bg-yellow-400/10 border border-yellow-400/15 rounded-2xl px-5 py-3.5 animate-slide-up delay-150">
                   <span className="text-lg">✏️</span>
@@ -165,20 +152,14 @@ export default async function HomePage() {
 
               {/* CTA row */}
               <div className="flex flex-col sm:flex-row items-center gap-3 animate-slide-up delay-150">
-                {/* Fee pill */}
                 <div className="flex items-center gap-2 bg-white/[0.07] border border-white/10 rounded-xl px-5 py-3">
-                  <span className="font-display font-bold text-white text-xl">{formatKES(entryFee)}</span>
+                  <span className="font-display font-bold text-white text-xl">from {formatKES(casualFee)}</span>
                   <span className="text-white/35 text-sm font-medium">entry</span>
                 </div>
 
-                {/* Enter button */}
                 <Link
                   href={sc.canEnter ? '/enter' : '#'}
-                  className={`inline-flex items-center gap-2.5 font-bold text-[1.05rem] px-8 py-3.5 rounded-xl transition-all duration-150 group ${
-                    sc.canEnter
-                      ? 'bg-brand-green text-brand-purple shadow-glow-green hover:shadow-[0_0_40px_rgba(0,255,135,0.5)] active:scale-[0.97]'
-                      : 'bg-white/[0.07] text-white/25 cursor-not-allowed pointer-events-none'
-                  }`}
+                  className={`inline-flex items-center gap-2.5 font-bold text-[1.05rem] px-8 py-3.5 rounded-xl transition-all duration-150 group ${sc.canEnter ? 'bg-brand-green text-brand-purple shadow-glow-green hover:shadow-[0_0_40px_rgba(0,255,135,0.5)] active:scale-[0.97]' : 'bg-white/[0.07] text-white/25 cursor-not-allowed pointer-events-none'}`}
                 >
                   <Zap className="w-5 h-5 fill-current" />
                   {sc.buttonLabel}
@@ -188,27 +169,23 @@ export default async function HomePage() {
 
               {/* Standings link */}
               {groupsAllocated && (gwStatus === 'ongoing' || gwStatus === 'ended') && (
-                <Link
-                  href="/standings"
-                  className="mt-6 inline-flex items-center gap-1.5 text-brand-green/60 hover:text-brand-green text-sm font-semibold transition-colors group animate-fade-in"
-                >
+                <Link href="/standings" className="mt-6 inline-flex items-center gap-1.5 text-brand-green/60 hover:text-brand-green text-sm font-semibold transition-colors group animate-fade-in">
                   View GW{settings?.gameweek_number} Standings
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                 </Link>
               )}
-
             </div>
           </div>
         </section>
 
-        {/* ─── STATS BAR ─────────────────────────────────────────── */}
+        {/* ─── STATS BAR ── */}
         <section className="bg-white border-b border-border">
           <div className="max-w-6xl mx-auto px-4 sm:px-6">
             <div className="grid grid-cols-3 divide-x divide-border">
               {[
-                { label: 'Group size', value: 'Up to 32' },
-                { label: 'Member Pass', value: formatKES(entryFee) },
-                { label: 'Paid via', value: 'M-Pesa & PayPal' },
+                { label: 'Max group size', value: 'Up to 16' },
+                { label: 'Entry from', value: formatKES(casualFee) },
+                { label: 'Paid via', value: 'M-Pesa' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex flex-col items-center py-5 px-4 text-center">
                   <span className="font-display font-bold text-brand-purple text-[1.15rem] sm:text-xl">{value}</span>
@@ -219,128 +196,62 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* ─── HOW IT WORKS ──────────────────────────────────────── */}
+        {/* ─── HOW IT WORKS ── */}
         <section className="py-20 sm:py-28 bg-background">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
-
             <div className="text-center mb-14">
               <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-brand-purple/50 mb-3">How it works</p>
-              <h2 className="font-display font-bold text-[2rem] sm:text-[2.6rem] text-text-primary">
-                Three steps to get started
-              </h2>
+              <h2 className="font-display font-bold text-[2rem] sm:text-[2.6rem] text-text-primary">Three steps to get started</h2>
             </div>
 
             <div className="grid sm:grid-cols-3 gap-5">
-
-              {/* Step 01 */}
               <div className="relative card p-7 hover:shadow-card-hover transition-shadow duration-200">
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-brand-purple/5 mb-5">
                   <span className="font-display font-bold text-sm text-brand-purple">01</span>
                 </div>
                 <h3 className="font-bold text-[1.05rem] mb-2">
-                  <a
-                    href={fplLeagueUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-brand-purple underline underline-offset-2 hover:text-brand-purple/70 transition-colors"
-                  >
+                  <a href={fplLeagueUrl} target="_blank" rel="noopener noreferrer" className="text-brand-purple underline underline-offset-2 hover:text-brand-purple/70 transition-colors">
                     Join our FPL league
                   </a>
                 </h3>
-                <p className="text-text-secondary text-sm leading-relaxed">You must be a member of our private FPL league before registering here.</p>
+                <p className="text-text-secondary text-sm leading-relaxed">You must be a member of our private FPL league before registering.</p>
               </div>
 
-              {/* Step 02 */}
               <div className="relative card p-7 hover:shadow-card-hover transition-shadow duration-200">
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-brand-green/5 mb-5">
                   <span className="font-display font-bold text-sm text-brand-green">02</span>
                 </div>
-                <h3 className="font-bold text-text-primary text-[1.05rem] mb-2">Link your FPL ID & pay</h3>
-                <p className="text-text-secondary text-sm leading-relaxed">Enter your FPL team ID, pay the weekly fee via M-Pesa or PayPal, and get your private PIN instantly.</p>
+                <h3 className="font-bold text-text-primary text-[1.05rem] mb-2">Pick your tier &amp; pay</h3>
+                <p className="text-text-secondary text-sm leading-relaxed">Enter your FPL team ID, choose Casual or Elite, pay via M-Pesa, and get your private PIN instantly.</p>
               </div>
 
-              {/* Step 03 */}
               <div className="relative card p-7 hover:shadow-card-hover transition-shadow duration-200">
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-brand-cyan/5 mb-5">
                   <span className="font-display font-bold text-sm text-brand-cyan">03</span>
                 </div>
-                <h3 className="font-bold text-text-primary text-[1.05rem] mb-2">The best in your circle, get recognised</h3>
-                <p className="text-text-secondary text-sm leading-relaxed">Highest scorers receive their share directly — M-Pesa or PayPal.</p>
+                <h3 className="font-bold text-text-primary text-[1.05rem] mb-2">The best in your circle get recognised</h3>
+                <p className="text-text-secondary text-sm leading-relaxed">Highest scorers receive their share directly — straight to M-Pesa.</p>
               </div>
+            </div>
 
+            {/* Rules CTA */}
+            <div className="mt-10 text-center">
+              <Link href="/rules" className="inline-flex items-center gap-2 text-brand-purple font-semibold text-sm hover:underline">
+                <BookOpen className="w-4 h-4" />
+                Read the full platform rules
+              </Link>
             </div>
           </div>
         </section>
 
-        {/* ─── PRIZE SECTION ─────────────────────────────────────── */}
-        {settings?.giveaway_type === 'money' && (
-          <section className="py-20 sm:py-28 bg-brand-purple text-white relative overflow-hidden">
-            <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute inset-0 opacity-[0.03]" style={{
-                backgroundImage: `repeating-linear-gradient(-45deg, #04F5FF 0, #04F5FF 1px, transparent 0, transparent 50%)`,
-                backgroundSize: '30px 30px',
-              }} />
-              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-            </div>
-
-            <div className="relative max-w-5xl mx-auto px-4 sm:px-6 text-center">
-              <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-brand-green/60 mb-3">Rewards</p>
-              <h2 className="font-display font-bold text-[2rem] sm:text-[2.6rem] mb-3">
-                Top {settings?.winners_per_group ?? 2} in each group{' '}
-                <span className="text-brand-green">get paid</span>
-              </h2>
-              <p className="text-white/40 text-[0.95rem] mb-14 max-w-md mx-auto">
-                Transferred directly to your M-Pesa or PayPal. Automatic, every gameweek.
-              </p>
-
-              {/* Prize cards */}
-              <div className="flex flex-wrap justify-center gap-3 mb-8">
-                {Object.entries(payoutPcts)
-                  .filter(([k]) => k !== 'platform')
-                  .sort(([a], [b]) => parseInt(a) - parseInt(b))
-                  .map(([pos, pct]) => {
-                    const pctNum = Number(pct)
-                    const amount = Math.floor(distributable * (pctNum / 100))
-                    const isFirst = pos === '1'
-                    return (
-                      <div
-                        key={pos}
-                        className={`relative rounded-2xl px-7 py-6 border text-center transition-transform hover:-translate-y-1 ${
-                          isFirst
-                            ? 'bg-brand-green/[0.08] border-brand-green/25 scale-105'
-                            : 'bg-white/[0.04] border-white/[0.08]'
-                        }`}
-                      >
-                        {isFirst && (
-                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-green text-brand-purple text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-wide">
-                            Top Prize
-                          </div>
-                        )}
-                        <div className="text-2xl mb-3">
-                          {pos === '1' ? '🥇' : pos === '2' ? '🥈' : pos === '3' ? '🥉' : `#${pos}`}
-                        </div>
-                        <div className="font-display font-bold text-2xl text-brand-green mb-0.5">
-                          {pctNum}%
-                        </div>
-                        <div className="text-white/30 text-xs">up to {formatKES(amount)}</div>
-                      </div>
-                    )
-                  })}
-              </div>
-              <p className="text-white/20 text-[11px]">*Based on full group of 32. Actual amounts vary.</p>
-            </div>
-          </section>
-        )}
-
-        {/* ─── TRUST ─────────────────────────────────────────────── */}
+        {/* ─── TRUST ── */}
         <section className="py-16 sm:py-20 bg-surface-alt border-t border-border">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <div className="grid sm:grid-cols-3 gap-6">
               {[
-                { icon: Shield, title: 'Verified Payments', body: 'M-Pesa STK Push and PayPal. Trusted payment rails.' },
-                { icon: Users, title: 'Small, Focused Groups', body: 'You are placed in one dedicated small peer group each week ' },
-                { icon: Trophy, title: 'Direct Transfers', body: 'The best receive funds straight to their account.' },
+                { icon: Shield, title: 'Verified Payments', body: 'M-Pesa STK Push. Trusted payment rails.' },
+                { icon: Users, title: 'Small, Focused Groups', body: 'You are placed in one dedicated small peer group each week.' },
+                { icon: Trophy, title: 'Direct Transfers', body: 'The best receive funds straight to their M-Pesa account.' },
               ].map(({ icon: Icon, title, body }) => (
                 <div key={title} className="flex items-start gap-4">
                   <div className="w-10 h-10 rounded-xl bg-brand-purple/8 border border-brand-purple/10 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -356,24 +267,17 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* ─── BOTTOM CTA ────────────────────────────────────────── */}
+        {/* ─── BOTTOM CTA ── */}
         {gwStatus === 'upcoming' && sc.canEnter && (
           <section className="py-16 bg-brand-green">
             <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center">
-              <h2 className="font-display font-bold text-[2rem] text-brand-purple mb-2">
-                GW{settings?.gameweek_number} is open
-              </h2>
+              <h2 className="font-display font-bold text-[2rem] text-brand-purple mb-2">GW{settings?.gameweek_number} is open</h2>
               {sc.showCountdown && settings?.entry_deadline && (
-                <p className="text-brand-purple/60 mb-8 text-[0.95rem]">
-                  Closes {formatDeadline(settings.entry_deadline)}
-                </p>
+                <p className="text-brand-purple/60 mb-8 text-[0.95rem]">Closes {formatDeadline(settings.entry_deadline)}</p>
               )}
-              <Link
-                href="/enter"
-                className="inline-flex items-center gap-2.5 bg-brand-purple text-white font-bold text-[1.05rem] px-8 py-3.5 rounded-xl hover:bg-opacity-90 active:scale-[0.97] transition-all shadow-deep group"
-              >
+              <Link href="/enter" className="inline-flex items-center gap-2.5 bg-brand-purple text-white font-bold text-[1.05rem] px-8 py-3.5 rounded-xl hover:bg-opacity-90 active:scale-[0.97] transition-all shadow-deep group">
                 <Zap className="w-5 h-5 fill-current" />
-                Join — {formatKES(entryFee)}
+                Join — from {formatKES(casualFee)}
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
             </div>

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { initiateStkPush, validateMpesaPhone } from '@/lib/mpesa'
 import { logger } from '@/lib/logger'
+import type { TierSettings } from '@/types'
 
 export async function POST(request: NextRequest) {
   const file = 'src/app/api/mpesa/initiate/route.ts'
@@ -26,7 +27,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate phone
     const phoneValidation = validateMpesaPhone(phone)
     if (!phoneValidation.valid) {
       return NextResponse.json(
@@ -38,10 +38,10 @@ export async function POST(request: NextRequest) {
     const formattedPhone = phoneValidation.formatted!
     const supabase = createServerSupabaseClient()
 
-    // Get entry
+    // Get entry — include entry_tier
     const { data: entry, error: entryError } = await supabase
       .from('entries')
-      .select('id, fpl_team_id, payment_status, payment_reference')
+      .select('id, fpl_team_id, payment_status, payment_reference, entry_tier')
       .eq('id', entryId)
       .single()
 
@@ -59,10 +59,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get settings for entry fee
+    // Get settings — read correct tier fee
     const { data: settings } = await supabase
       .from('settings')
-      .select('entry_fee, gameweek_number')
+      .select('gameweek_number, casual_settings, elite_settings')
       .single()
 
     if (!settings) {
@@ -72,15 +72,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Initiate STK Push
+    const tier = entry.entry_tier ?? 'casual'
+    const tierSettings: TierSettings = tier === 'elite'
+      ? (settings.elite_settings as TierSettings)
+      : (settings.casual_settings as TierSettings)
+
+    const entryFee = tierSettings?.entry_fee ?? 200
+
     const stkResult = await initiateStkPush({
       phone: formattedPhone,
-      amount: settings.entry_fee,
-      accountReference: `FPL123-GW${settings.gameweek_number}`,
-      description: `FPL123 GW${settings.gameweek_number} Entry`,
+      amount: entryFee,
+      accountReference: `FPL123-GW${settings.gameweek_number}-${tier.toUpperCase()}`,
+      description: `FPL123 GW${settings.gameweek_number} ${tier === 'elite' ? 'Elite' : 'Casual'} Entry`,
     })
 
-    // Save checkout request ID to entry
     await supabase
       .from('entries')
       .update({
@@ -90,7 +95,7 @@ export async function POST(request: NextRequest) {
       .eq('id', entryId)
 
     logger.mpesa.success(
-      `STK Push sent for entry ${entryId}. CheckoutRequestID: ${stkResult.CheckoutRequestID}`,
+      `STK Push sent for entry ${entryId} (${tier}). CheckoutRequestID: ${stkResult.CheckoutRequestID}`,
       { file }
     )
 
@@ -103,17 +108,9 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (err) {
-    logger.mpesa.error(`STK Push failed: ${String(err)}`, {
-      file,
-      function: 'POST /api/mpesa/initiate',
-      stack: err instanceof Error ? err.stack : undefined,
-    })
-
+    logger.mpesa.error(`STK Push failed: ${String(err)}`, { file })
     return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to initiate M-Pesa payment. Please try again.',
-      },
+      { success: false, error: 'Failed to initiate M-Pesa payment. Please try again.' },
       { status: 500 }
     )
   }

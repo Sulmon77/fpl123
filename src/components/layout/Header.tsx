@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, X, Trophy, History, BarChart2, Zap, Mail } from 'lucide-react'
+import { Menu, X, Trophy, History, BarChart2, Zap, Mail, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface HeaderProps {
@@ -32,12 +32,12 @@ export function Header({
     return () => window.removeEventListener('scroll', handler)
   }, [])
 
-  // Close mobile menu on route change
   useEffect(() => { setMobileOpen(false) }, [pathname])
 
   const contactHref = pathname === '/' ? '#contact' : '/#contact'
 
   const navLinks = [
+    { href: '/rules', label: 'Rules', icon: BookOpen },
     { href: '/standings', label: 'Standings', icon: BarChart2 },
     ...(hallOfFameEnabled ? [{ href: '/hall-of-fame', label: 'Hall of Fame', icon: Trophy }] : []),
     ...(historyVisible ? [{ href: '/history', label: 'History', icon: History }] : []),
@@ -55,8 +55,7 @@ export function Header({
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 group flex-shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-brand-green flex items-center justify-center
-                            transition-all duration-200 group-hover:scale-105 group-hover:shadow-glow-green-sm">
+            <div className="w-8 h-8 rounded-lg bg-brand-green flex items-center justify-center transition-all duration-200 group-hover:scale-105 group-hover:shadow-glow-green-sm">
               <Zap className="w-4.5 h-4.5 text-brand-purple fill-current" />
             </div>
             <span className="font-display font-bold text-[1.2rem] text-white tracking-tight leading-none">
@@ -98,20 +97,13 @@ export function Header({
                 ? 'bg-brand-green/10 border-brand-green/30 text-brand-green'
                 : 'bg-white/[0.05] border-white/10 text-white/30'
             )}>
-              <span className={cn(
-                'w-1.5 h-1.5 rounded-full flex-shrink-0',
-                registrationOpen ? 'bg-brand-green animate-pulse' : 'bg-white/20'
-              )} />
+              <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', registrationOpen ? 'bg-brand-green animate-pulse' : 'bg-white/20')} />
               {registrationOpen ? 'Open' : 'Closed'}
             </div>
           </div>
 
           {/* Mobile toggle */}
-          <button
-            className="md:hidden text-white/70 hover:text-white p-2 rounded-lg hover:bg-white/[0.07] transition-colors"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label="Toggle menu"
-          >
+          <button className="md:hidden text-white/70 hover:text-white p-2 rounded-lg hover:bg-white/[0.07] transition-colors" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle menu">
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
@@ -121,43 +113,17 @@ export function Header({
       {mobileOpen && (
         <div className="md:hidden border-t border-white/[0.08] bg-brand-purple animate-slide-down">
           <div className="px-4 py-3 space-y-1">
-            {/* Status pill mobile */}
-            <div className={cn(
-              'flex items-center justify-center gap-2 px-4 py-2.5 mb-1 rounded-xl text-[13px] font-bold border',
-              registrationOpen
-                ? 'bg-brand-green/10 border-brand-green/20 text-brand-green'
-                : 'bg-white/[0.04] border-white/10 text-white/30'
-            )}>
-              <span className={cn(
-                'w-1.5 h-1.5 rounded-full',
-                registrationOpen ? 'bg-brand-green animate-pulse' : 'bg-white/20'
-              )} />
+            <div className={cn('flex items-center justify-center gap-2 px-4 py-2.5 mb-1 rounded-xl text-[13px] font-bold border', registrationOpen ? 'bg-brand-green/10 border-brand-green/20 text-brand-green' : 'bg-white/[0.04] border-white/10 text-white/30')}>
+              <span className={cn('w-1.5 h-1.5 rounded-full', registrationOpen ? 'bg-brand-green animate-pulse' : 'bg-white/20')} />
               Registration {registrationOpen ? 'Open' : 'Closed'}
             </div>
-
             {navLinks.map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setMobileOpen(false)}
-                className={cn(
-                  'flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-semibold transition-all',
-                  pathname === href
-                    ? 'bg-white/10 text-white'
-                    : 'text-white/60 hover:text-white hover:bg-white/[0.07]'
-                )}
-              >
-                <Icon className="w-4 h-4" />
-                {label}
+              <Link key={href} href={href} onClick={() => setMobileOpen(false)} className={cn('flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-semibold transition-all', pathname === href ? 'bg-white/10 text-white' : 'text-white/60 hover:text-white hover:bg-white/[0.07]')}>
+                <Icon className="w-4 h-4" />{label}
               </Link>
             ))}
-            <a
-              href={contactHref}
-              onClick={() => setMobileOpen(false)}
-              className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-semibold text-white/60 hover:text-white hover:bg-white/[0.07] transition-all"
-            >
-              <Mail className="w-4 h-4" />
-              Contact
+            <a href={contactHref} onClick={() => setMobileOpen(false)} className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-semibold text-white/60 hover:text-white hover:bg-white/[0.07] transition-all">
+              <Mail className="w-4 h-4" />Contact
             </a>
           </div>
         </div>

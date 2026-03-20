@@ -1,13 +1,12 @@
 'use client'
 // src/app/standings/page.tsx
-// PIN-gated standings page
 
 import { useState, useEffect, useCallback } from 'react'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import {
   Lock, Loader2, AlertCircle, RotateCcw,
-  ExternalLink, ArrowUpDown, Clock
+  ExternalLink, ArrowUpDown, Clock, Users, Trophy, Hourglass,
 } from 'lucide-react'
 import { cn, formatKES, CHIP_LABELS, positionEmoji, timeAgo } from '@/lib/utils'
 
@@ -35,6 +34,7 @@ interface StandingsData {
   distributablePot: number
   lastRefreshed: string | null
   refreshInterval: number
+  entryTier?: string
 }
 
 interface Settings {
@@ -48,16 +48,12 @@ interface Settings {
 
 export default function StandingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
-  const [authStep, setAuthStep] = useState<'input' | 'loading' | 'done' | 'error'>('input')
-
-  // Auth form
+  const [authStep, setAuthStep] = useState<'input' | 'loading' | 'done' | 'error' | 'not_allocated'>('input')
   const [fplId, setFplId] = useState('')
   const [pinInput, setPinInput] = useState('')
   const [authError, setAuthError] = useState<string | null>(null)
-
-  // Group data
+  const [notAllocatedTier, setNotAllocatedTier] = useState<string | null>(null)
   const [groupId, setGroupId] = useState<string | null>(null)
-  const [groupNumber, setGroupNumber] = useState<number | null>(null)
   const [standingsData, setStandingsData] = useState<StandingsData | null>(null)
   const [loadingStandings, setLoadingStandings] = useState(false)
   const [myFplId, setMyFplId] = useState<number | null>(null)
@@ -73,48 +69,39 @@ export default function StandingsPage() {
     try {
       const res = await fetch(`/api/standings/${gid}`)
       const data = await res.json()
-      if (data.success) {
-        setStandingsData(data.data)
-      }
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoadingStandings(false)
-    }
+      if (data.success) setStandingsData(data.data)
+    } catch (e) { console.error(e) }
+    finally { setLoadingStandings(false) }
   }, [])
 
-  // Auto-refresh standings
   useEffect(() => {
     if (!groupId || !standingsData) return
-    const interval = setInterval(() => {
-      loadStandings(groupId)
-    }, (standingsData.refreshInterval ?? 120) * 60 * 1000)
+    const interval = setInterval(
+      () => loadStandings(groupId),
+      (standingsData.refreshInterval ?? 120) * 60 * 1000
+    )
     return () => clearInterval(interval)
   }, [groupId, standingsData, loadStandings])
 
   const handleAuth = async () => {
     if (!fplId || !pinInput || !settings) return
-
-    setAuthStep('loading')
-    setAuthError(null)
-
+    setAuthStep('loading'); setAuthError(null)
     try {
       const res = await fetch(`/api/manager/${fplId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pin: pinInput,
-          gameweekNumber: settings.gameweek_number,
-        }),
+        body: JSON.stringify({ pin: pinInput, gameweekNumber: settings.gameweek_number }),
       })
       const data = await res.json()
 
       if (data.success) {
         setGroupId(data.data.groupId)
-        setGroupNumber(data.data.groupNumber)
         setMyFplId(parseInt(fplId))
         setAuthStep('done')
         await loadStandings(data.data.groupId)
+      } else if (data.errorCode === 'GROUP_NOT_ALLOCATED') {
+        setNotAllocatedTier(data.data?.entryTier ?? null)
+        setAuthStep('not_allocated')
       } else {
         setAuthError(data.error)
         setAuthStep('error')
@@ -133,6 +120,9 @@ export default function StandingsPage() {
     )
   }
 
+  const tier = standingsData?.entryTier
+  const tierLabel = tier === 'elite' ? 'Elite' : 'Casual'
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header
@@ -146,26 +136,20 @@ export default function StandingsPage() {
       <main className="flex-1 py-8 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
 
-          {/* Auth form */}
-          {authStep !== 'done' && (
+          {/* ── Auth form ──────────────────────────────────────── */}
+          {(authStep === 'input' || authStep === 'loading' || authStep === 'error') && (
             <div className="max-w-sm mx-auto">
               <div className="text-center mb-8">
                 <div className="w-14 h-14 rounded-full bg-brand-purple/10 flex items-center justify-center mx-auto mb-4">
                   <Lock className="w-7 h-7 text-brand-purple" />
                 </div>
-                <h1 className="font-display font-bold text-2xl text-text-primary">
-                  View Your Standings
-                </h1>
-                <p className="text-text-secondary mt-1 text-sm">
-                  Enter your FPL ID and PIN to access your group
-                </p>
+                <h1 className="font-display font-bold text-2xl text-text-primary">View Your Standings</h1>
+                <p className="text-text-secondary mt-1 text-sm">Enter your FPL ID and PIN to access your group</p>
               </div>
 
               <div className="card p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-text-secondary mb-1.5">
-                    FPL Team ID
-                  </label>
+                  <label className="block text-sm font-semibold text-text-secondary mb-1.5">FPL Team ID</label>
                   <input
                     type="number"
                     value={fplId}
@@ -177,15 +161,12 @@ export default function StandingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-text-secondary mb-1.5">
-                    Your 4-Digit PIN
-                  </label>
+                  <label className="block text-sm font-semibold text-text-secondary mb-1.5">Your 4-Digit PIN</label>
                   <input
                     type="text"
                     value={pinInput}
                     onChange={e => {
-                      const val = e.target.value.replace(/\D/g, '').slice(0, 4)
-                      setPinInput(val)
+                      setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))
                       setAuthError(null)
                     }}
                     onKeyDown={e => e.key === 'Enter' && handleAuth()}
@@ -194,9 +175,7 @@ export default function StandingsPage() {
                     maxLength={4}
                     disabled={authStep === 'loading'}
                   />
-                  <p className="text-xs text-text-secondary mt-1">
-                    The PIN was shown after your payment was confirmed
-                  </p>
+                  <p className="text-xs text-text-secondary mt-1">The PIN was shown after your payment was confirmed</p>
                 </div>
 
                 {authError && (
@@ -211,14 +190,9 @@ export default function StandingsPage() {
                   disabled={!fplId || pinInput.length !== 4 || authStep === 'loading'}
                   className="btn-primary w-full flex items-center justify-center gap-2"
                 >
-                  {authStep === 'loading' ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading your group...
-                    </>
-                  ) : (
-                    'View My Standings'
-                  )}
+                  {authStep === 'loading'
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Loading your group…</>
+                    : 'View My Standings'}
                 </button>
 
                 {authStep === 'error' && (
@@ -226,23 +200,77 @@ export default function StandingsPage() {
                     onClick={() => { setAuthStep('input'); setAuthError(null) }}
                     className="flex items-center gap-1.5 text-sm text-text-secondary mx-auto hover:text-text-primary"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Try again
+                    <RotateCcw className="w-3.5 h-3.5" /> Try again
                   </button>
                 )}
               </div>
             </div>
           )}
 
-          {/* Standings view */}
+          {/* ── Groups not yet allocated ───────────────────────── */}
+          {authStep === 'not_allocated' && (
+            <div className="max-w-sm mx-auto text-center space-y-6">
+              <div className="card p-8 space-y-5">
+                <div className="w-16 h-16 rounded-full bg-warning/10 flex items-center justify-center mx-auto">
+                  <Hourglass className="w-8 h-8 text-warning" />
+                </div>
+
+                <div>
+                  <h2 className="font-display font-bold text-xl text-text-primary mb-2">
+                    Groups not yet allocated
+                  </h2>
+                  <p className="text-text-secondary text-sm leading-relaxed">
+                    Your PIN is correct and your{' '}
+                    {notAllocatedTier
+                      ? <strong className={cn('capitalize', notAllocatedTier === 'elite' ? 'text-brand-purple' : 'text-brand-purple')}>
+                          {notAllocatedTier}
+                        </strong>
+                      : 'group'
+                    }{' '}
+                    entry is confirmed for GW{settings.gameweek_number}.
+                    Groups are created after the registration deadline — check back soon.
+                  </p>
+                </div>
+
+                {notAllocatedTier && (
+                  <div className={cn(
+                    'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold',
+                    notAllocatedTier === 'elite'
+                      ? 'bg-brand-purple/10 text-brand-purple'
+                      : 'bg-brand-purple/10 text-brand-purple'
+                  )}>
+                    {notAllocatedTier === 'elite' ? <Trophy className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
+                    <span className="capitalize">{notAllocatedTier} Manager</span>
+                    <span className="text-brand-purple/50">· GW{settings.gameweek_number}</span>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => { setAuthStep('input'); setAuthError(null); setNotAllocatedTier(null) }}
+                  className="btn-primary w-full"
+                >
+                  Back
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Standings view ─────────────────────────────────── */}
           {authStep === 'done' && (
-            <div className="space-y-4 animate-slide-up">
+            <div className="space-y-5 animate-slide-up">
               {/* Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h1 className="font-display font-bold text-2xl text-text-primary">
-                    Gameweek {settings.gameweek_number} — Group {groupNumber}
-                  </h1>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={cn(
+                      'text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full',
+                      tier === 'elite' ? 'bg-brand-purple text-white' : 'bg-brand-purple/10 text-brand-purple'
+                    )}>
+                      {tierLabel}
+                    </span>
+                    <span className="text-xs text-text-secondary">GW{settings.gameweek_number}</span>
+                  </div>
+                  <h1 className="font-display font-bold text-2xl text-text-primary">Your Group</h1>
                   {standingsData?.lastRefreshed && (
                     <p className="text-text-secondary text-sm flex items-center gap-1 mt-0.5">
                       <Clock className="w-3.5 h-3.5" />
@@ -253,27 +281,49 @@ export default function StandingsPage() {
                 <button
                   onClick={() => groupId && loadStandings(groupId)}
                   disabled={loadingStandings}
-                  className="flex items-center gap-1.5 text-sm text-brand-purple font-semibold hover:underline"
+                  className="flex items-center gap-1.5 text-sm text-brand-purple font-semibold hover:underline self-start sm:self-auto"
                 >
-                  <RotateCcw className={cn('w-4 h-4', loadingStandings && 'animate-spin')} />
-                  Refresh
+                  <RotateCcw className={cn('w-4 h-4', loadingStandings && 'animate-spin')} /> Refresh
                 </button>
               </div>
 
-              {/* Prize banner */}
+              {/* Group info card */}
+              <div className="card p-4 flex items-center gap-4">
+                <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', tier === 'elite' ? 'bg-brand-purple/10' : 'bg-brand-purple/5')}>
+                  {tier === 'elite'
+                    ? <Trophy className="w-5 h-5 text-brand-purple" />
+                    : <Users className="w-5 h-5 text-brand-purple" />}
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-text-primary text-sm">Group Information</p>
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    {standingsData?.standings.length ?? 0} managers competing ·{' '}
+                    Top {standingsData?.winnersPerGroup ?? 1} win prizes
+                  </p>
+                </div>
+                {standingsData && standingsData.distributablePot > 0 && (
+                  <div className="text-right">
+                    <p className="font-display font-bold text-brand-purple">{formatKES(standingsData.distributablePot)}</p>
+                    <p className="text-xs text-text-secondary">Prize pool</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Prize breakdown — amounts only */}
               {standingsData && standingsData.distributablePot > 0 && (
                 <div className="bg-brand-purple text-white rounded-xl p-4">
-                  <p className="text-sm text-white/70 mb-2">
-                    🏆 Top {standingsData.winnersPerGroup} in your group win
-                  </p>
-                  <div className="flex flex-wrap gap-3">
+                  <p className="text-sm text-white/70 mb-3">🏆 Top {standingsData.winnersPerGroup} in your group win</p>
+                  <div className="flex flex-wrap gap-2.5">
                     {Object.entries(standingsData.prizesByPosition).map(([pos, amount]) => (
-                      <div key={pos} className="bg-white/10 rounded-lg px-3 py-1.5 text-sm font-semibold">
-                        {pos === '1' ? '🥇' : pos === '2' ? '🥈' : pos === '3' ? '🥉' : `#${pos}`}{' '}
-                        {formatKES(amount)}
+                      <div key={pos} className="bg-white/10 rounded-lg px-3 py-2 text-center">
+                        <p className="text-sm font-bold">
+                          {pos === '1' ? '🥇' : pos === '2' ? '🥈' : pos === '3' ? '🥉' : `#${pos}`}{' '}
+                          {formatKES(amount)}
+                        </p>
                       </div>
                     ))}
                   </div>
+                  <p className="text-xs text-white/30 mt-2">Amounts may vary if group is not full</p>
                 </div>
               )}
 
@@ -297,17 +347,15 @@ export default function StandingsPage() {
                         Array.from({ length: 5 }).map((_, i) => (
                           <tr key={i}>
                             {Array.from({ length: 7 }).map((_, j) => (
-                              <td key={j}>
-                                <div className="skeleton h-4 rounded w-16" />
-                              </td>
+                              <td key={j}><div className="skeleton h-4 rounded w-16" /></td>
                             ))}
                           </tr>
                         ))
                       ) : (
-                        standingsData?.standings.map((row) => {
+                        standingsData?.standings.map(row => {
                           const isMe = row.fpl_team_id === myFplId
                           const pos = row.standing_position ?? 999
-                          const isWinner = pos <= (standingsData.winnersPerGroup ?? 2)
+                          const isWinner = pos <= (standingsData.winnersPerGroup ?? 1)
 
                           return (
                             <tr
@@ -318,93 +366,45 @@ export default function StandingsPage() {
                                 isWinner && !isMe && 'bg-yellow-50/50'
                               )}
                             >
-                              {/* Position */}
                               <td className="text-center">
-                                <span className={cn(
-                                  'font-bold text-sm',
-                                  pos === 1 && 'text-yellow-500',
-                                  pos === 2 && 'text-gray-400',
-                                  pos === 3 && 'text-amber-700'
-                                )}>
+                                <span className={cn('font-bold text-sm', pos === 1 && 'text-yellow-500', pos === 2 && 'text-gray-400', pos === 3 && 'text-amber-700')}>
                                   {positionEmoji(pos)}
                                 </span>
                               </td>
-
-                              {/* Manager name + team */}
                               <td>
                                 <div>
-                                  <a
-                                    href={`https://fantasy.premierleague.com/entry/${row.fpl_team_id}/event/${settings.gameweek_number}/`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="font-semibold text-text-primary hover:text-brand-purple transition-colors flex items-center gap-1 group"
-                                  >
+                                  <a href={`https://fantasy.premierleague.com/entry/${row.fpl_team_id}/event/${settings.gameweek_number}/`} target="_blank" rel="noopener noreferrer" className="font-semibold text-text-primary hover:text-brand-purple transition-colors flex items-center gap-1 group">
                                     {row.manager_name}
-                                    {isMe && (
-                                      <span className="text-xs bg-brand-green text-brand-purple font-bold px-1.5 py-0.5 rounded">
-                                        YOU
-                                      </span>
-                                    )}
+                                    {isMe && <span className="text-xs bg-brand-green text-brand-purple font-bold px-1.5 py-0.5 rounded">YOU</span>}
                                     <ExternalLink className="w-3 h-3 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity" />
                                   </a>
-                                  <a
-                                    href={`https://fantasy.premierleague.com/entry/${row.fpl_team_id}/event/${settings.gameweek_number}/`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-text-secondary hover:text-brand-purple transition-colors"
-                                  >
+                                  <a href={`https://fantasy.premierleague.com/entry/${row.fpl_team_id}/event/${settings.gameweek_number}/`} target="_blank" rel="noopener noreferrer" className="text-xs text-text-secondary hover:text-brand-purple transition-colors">
                                     {row.fpl_team_name}
                                   </a>
                                 </div>
                               </td>
-
-                              {/* Points */}
+                              <td className="text-center"><span className="font-bold text-text-primary">{row.gw_points}</span></td>
                               <td className="text-center">
-                                <span className="font-bold text-text-primary">{row.gw_points}</span>
+                                {row.transfer_hits > 0
+                                  ? <span className="text-xs font-bold text-error bg-error/10 px-2 py-0.5 rounded">-{row.transfer_hits}</span>
+                                  : <span className="text-text-secondary text-xs">—</span>}
                               </td>
-
-                              {/* Hits */}
                               <td className="text-center">
-                                {row.transfer_hits > 0 ? (
-                                  <span className="text-xs font-bold text-error bg-error/10 px-2 py-0.5 rounded">
-                                    -{row.transfer_hits}
-                                  </span>
-                                ) : (
-                                  <span className="text-text-secondary text-xs">—</span>
-                                )}
+                                {row.chip_used
+                                  ? <span className={cn('chip-badge', `chip-${row.chip_used}`)}>{CHIP_LABELS[row.chip_used] ?? row.chip_used}</span>
+                                  : <span className="text-text-secondary text-xs">—</span>}
                               </td>
-
-                              {/* Chip */}
                               <td className="text-center">
-                                {row.chip_used ? (
-                                  <span className={cn('chip-badge', `chip-${row.chip_used}`)}>
-                                    {CHIP_LABELS[row.chip_used] ?? row.chip_used}
-                                  </span>
-                                ) : (
-                                  <span className="text-text-secondary text-xs">—</span>
-                                )}
+                                {row.is_clean
+                                  ? <span className="text-success text-base">✓</span>
+                                  : <span className="text-text-secondary text-xs">✗</span>}
                               </td>
-
-                              {/* Clean */}
-                              <td className="text-center">
-                                {row.is_clean ? (
-                                  <span className="text-success text-base">✓</span>
-                                ) : (
-                                  <span className="text-text-secondary text-xs">✗</span>
-                                )}
-                              </td>
-
-                              {/* Prize */}
                               <td className="text-right">
-                                {isWinner && row.prize_amount > 0 ? (
-                                  <span className="font-bold text-success text-sm">
-                                    {formatKES(row.prize_amount)}
-                                  </span>
-                                ) : isWinner ? (
-                                  <span className="text-xs text-success font-semibold">Winner</span>
-                                ) : (
-                                  <span className="text-text-secondary text-xs">—</span>
-                                )}
+                                {isWinner && row.prize_amount > 0
+                                  ? <span className="font-bold text-success text-sm">{formatKES(row.prize_amount)}</span>
+                                  : isWinner
+                                  ? <span className="text-xs text-success font-semibold">Winner</span>
+                                  : <span className="text-text-secondary text-xs">—</span>}
                               </td>
                             </tr>
                           )
@@ -415,7 +415,6 @@ export default function StandingsPage() {
                 </div>
               </div>
 
-              {/* Tiebreaker note */}
               <p className="text-xs text-text-secondary text-center">
                 <ArrowUpDown className="w-3 h-3 inline mr-1" />
                 Managers with no transfer hits and no chips used are ranked higher on equal points

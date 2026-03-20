@@ -1,22 +1,21 @@
 // src/app/api/manager/[fplId]/route.ts
-// Authenticate manager with PIN and return their group ID
+// PIN auth for standings — returns groupId, groupNumber, entry tier
+// Returns a clear not-allocated message if manager is confirmed but groups haven't been created yet
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
-import { logger } from '@/lib/logger'
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ fplId: string }> }
 ) {
-  const file = 'src/app/api/manager/[fplId]/route.ts'
+  const { fplId } = await params
 
   try {
-    const { fplId } = await params
-    const fplTeamId = parseInt(fplId)
-    const { pin, gameweekNumber } = await request.json()
+    const body = await request.json()
+    const { pin, gameweekNumber } = body
 
-    if (!fplTeamId || !pin || !gameweekNumber) {
+    if (!fplId || !pin || !gameweekNumber) {
       return NextResponse.json(
         { success: false, error: 'FPL ID, PIN, and gameweek number are required.' },
         { status: 400 }
@@ -25,99 +24,86 @@ export async function POST(
 
     const supabase = createServerSupabaseClient()
 
-    // Find entry
+    // Find the confirmed entry
     const { data: entry, error: entryError } = await supabase
       .from('entries')
-      .select('id, pin, pin_active, payment_status, disqualified')
-      .eq('fpl_team_id', fplTeamId)
+      .select('id, pin, pin_active, payment_status, disqualified, entry_tier')
+      .eq('fpl_team_id', parseInt(fplId))
       .eq('gameweek_number', gameweekNumber)
       .single()
 
     if (entryError || !entry) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'FPL ID not registered for this gameweek.',
-          errorCode: 'NOT_REGISTERED',
-        },
+        { success: false, error: 'No entry found for this FPL ID in the current gameweek.' },
         { status: 404 }
       )
     }
 
     if (entry.payment_status !== 'confirmed') {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Payment not confirmed for this entry.',
-          errorCode: 'PAYMENT_PENDING',
-        },
+        { success: false, error: 'Your payment has not been confirmed yet. Please complete your payment first.' },
         { status: 403 }
       )
     }
 
-    if (entry.pin !== pin) {
-      logger.auth.warn(`Wrong PIN attempt for FPL ID ${fplTeamId}`, { file })
+    if (entry.disqualified) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Incorrect PIN.',
-          errorCode: 'WRONG_PIN',
-        },
-        { status: 401 }
+        { success: false, error: 'This entry has been disqualified.' },
+        { status: 403 }
       )
     }
 
     if (!entry.pin_active) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Your PIN has been revoked. Please contact admin.',
-          errorCode: 'PIN_REVOKED',
-        },
+        { success: false, error: 'Your PIN has been revoked. Please contact the admin.' },
         { status: 403 }
       )
     }
 
-    // Find group membership
-    const { data: groupMember, error: groupError } = await supabase
+    if (entry.pin !== pin) {
+      return NextResponse.json(
+        { success: false, error: 'Incorrect PIN. Please check and try again.' },
+        { status: 401 }
+      )
+    }
+
+    // Find the group for this manager
+    const { data: groupMember, error: gmError } = await supabase
       .from('group_members')
-      .select('group_id, groups(group_number, gameweek_number)')
-      .eq('fpl_team_id', fplTeamId)
+      .select('group_id, groups(id, group_number, entry_tier)')
+      .eq('fpl_team_id', parseInt(fplId))
       .eq('gameweek_number', gameweekNumber)
       .single()
 
-    if (groupError || !groupMember) {
+    if (gmError || !groupMember) {
+      // Confirmed but not yet in a group — give tier-specific message
+      const tierLabel = entry.entry_tier === 'elite' ? 'Elite' : 'Casual'
       return NextResponse.json(
         {
           success: false,
-          error: 'Groups have not been allocated yet. Check back after the GW deadline.',
-          errorCode: 'NO_GROUPS',
+          error: `Your ${tierLabel} group hasn't been allocated yet. Check back soon — groups are created after the registration deadline.`,
+          errorCode: 'GROUP_NOT_ALLOCATED',
+          data: { entryTier: entry.entry_tier },
         },
         { status: 404 }
       )
     }
 
-    const group = groupMember.groups as unknown as { group_number: number; gameweek_number: number } | null
-
-    logger.auth.success(`PIN verified for FPL ID ${fplTeamId}, group ${group?.group_number}`, { file })
+    const group = Array.isArray(groupMember.groups)
+      ? groupMember.groups[0]
+      : groupMember.groups
 
     return NextResponse.json({
       success: true,
       data: {
         groupId: groupMember.group_id,
-        groupNumber: group?.group_number,
-        gameweekNumber: group?.gameweek_number,
-        disqualified: entry.disqualified,
+        groupNumber: (group as { group_number: number }).group_number,
+        entryTier: entry.entry_tier,
       },
     })
   } catch (err) {
-    logger.auth.error(`Manager auth error: ${String(err)}`, {
-      file,
-      function: 'POST /api/manager/[fplId]',
-    })
-
     return NextResponse.json(
-      { success: false, error: 'Authentication failed. Please try again.' },
+      { success: false, error: 'Something went wrong. Please try again.' },
       { status: 500 }
     )
   }
