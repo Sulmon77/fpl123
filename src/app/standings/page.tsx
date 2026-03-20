@@ -304,26 +304,38 @@ export default function StandingsPage() {
                 {standingsData && standingsData.distributablePot > 0 && (
                   <div className="text-right">
                     <p className="font-display font-bold text-brand-purple">{formatKES(standingsData.distributablePot)}</p>
-                    <p className="text-xs text-text-secondary">Prize pool</p>
+                    <p className="text-xs text-text-secondary">Total prizes</p>
                   </div>
                 )}
               </div>
 
-              {/* Prize breakdown — amounts only */}
-              {standingsData && standingsData.distributablePot > 0 && (
-                <div className="bg-brand-purple text-white rounded-xl p-4">
-                  <p className="text-sm text-white/70 mb-3">🏆 Top {standingsData.winnersPerGroup} in your group win</p>
-                  <div className="flex flex-wrap gap-2.5">
-                    {Object.entries(standingsData.prizesByPosition).map(([pos, amount]) => (
-                      <div key={pos} className="bg-white/10 rounded-lg px-3 py-2 text-center">
-                        <p className="text-sm font-bold">
-                          {pos === '1' ? '🥇' : pos === '2' ? '🥈' : pos === '3' ? '🥉' : `#${pos}`}{' '}
-                          {formatKES(amount)}
-                        </p>
-                      </div>
-                    ))}
+              {/* Prize breakdown — amounts only, no percentages shown to users */}
+              {standingsData && standingsData.distributablePot > 0 && Object.keys(standingsData.prizesByPosition).length > 0 && (
+                <div className="bg-brand-purple text-white rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-sm font-semibold text-white/80">
+                      🏆 Top {standingsData.winnersPerGroup} in your group win
+                    </p>
+                    <span className="text-xs text-white/30">{standingsData.standings.length} managers</span>
                   </div>
-                  <p className="text-xs text-white/30 mt-2">Amounts may vary if group is not full</p>
+                  <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Object.keys(standingsData.prizesByPosition).length}, 1fr)` }}>
+                    {Object.entries(standingsData.prizesByPosition)
+                      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                      .map(([pos, amount]) => (
+                        <div key={pos} className={cn(
+                          'rounded-xl py-3 px-2 text-center',
+                          pos === '1' ? 'bg-brand-green/20 border border-brand-green/30' : 'bg-white/10'
+                        )}>
+                          <p className="text-xl mb-1">
+                            {pos === '1' ? '🥇' : pos === '2' ? '🥈' : pos === '3' ? '🥉' : `#${pos}`}
+                          </p>
+                          <p className={cn('font-display font-bold text-lg leading-none', pos === '1' ? 'text-brand-green' : 'text-white')}>
+                            {formatKES(amount)}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                  <p className="text-xs text-white/30 mt-3">Prize = entry fees collected minus platform fee. Grows as more managers join.</p>
                 </div>
               )}
 
@@ -400,10 +412,15 @@ export default function StandingsPage() {
                                   : <span className="text-text-secondary text-xs">✗</span>}
                               </td>
                               <td className="text-right">
-                                {isWinner && row.prize_amount > 0
-                                  ? <span className="font-bold text-success text-sm">{formatKES(row.prize_amount)}</span>
-                                  : isWinner
-                                  ? <span className="text-xs text-success font-semibold">Winner</span>
+                                {isWinner
+                                  ? (
+                                    <div className="text-right">
+                                      <span className="font-bold text-success text-sm block">
+                                        {row.prize_amount > 0 ? formatKES(row.prize_amount) : '—'}
+                                      </span>
+                                      <span className="text-[10px] text-success/60 uppercase tracking-wide">prize</span>
+                                    </div>
+                                  )
                                   : <span className="text-text-secondary text-xs">—</span>}
                               </td>
                             </tr>
@@ -415,10 +432,21 @@ export default function StandingsPage() {
                 </div>
               </div>
 
+              {/* Tiebreaker rule */}
               <p className="text-xs text-text-secondary text-center">
                 <ArrowUpDown className="w-3 h-3 inline mr-1" />
                 Managers with no transfer hits and no chips used are ranked higher on equal points
               </p>
+
+              {/* Disclaimer */}
+              <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  <strong>Final standings at the close of the gameweek</strong> determine the winners and prize payouts — not live standings. Points are updated automatically but may lag behind FPL&apos;s official scores during the gameweek.
+                </p>
+              </div>
             </div>
           )}
         </div>

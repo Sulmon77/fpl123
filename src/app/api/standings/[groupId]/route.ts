@@ -1,126 +1,158 @@
 // src/app/api/standings/[groupId]/route.ts
-// Returns standings for a specific group
+// Returns standings for a group.
+// Prize calculation uses the correct tier settings (casual_settings or elite_settings)
+// so users always see accurate prize amounts based on admin-configured percentages.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import { calculateStandings } from '@/lib/groups'
-import { logger } from '@/lib/logger'
+import type { TierSettings } from '@/types'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ groupId: string }> }
 ) {
-  const file = 'src/app/api/standings/[groupId]/route.ts'
+  const { groupId } = await params
 
-  try {
-    const { groupId } = await params
-
-    const supabase = createServerSupabaseClient()
-
-    // Get group info + members
-    const { data: group, error: groupError } = await supabase
-      .from('groups')
-      .select(`
-        id,
-        group_number,
-        gameweek_number,
-        allocated_at,
-        group_members (
-          id,
-          fpl_team_id,
-          fpl_team_name,
-          manager_name,
-          gw_points,
-          transfer_hits,
-          chip_used,
-          standing_position,
-          prize_amount,
-          last_refreshed_at
-        )
-      `)
-      .eq('id', groupId)
-      .single()
-
-    if (groupError || !group) {
-      return NextResponse.json(
-        { success: false, error: 'Group not found.' },
-        { status: 404 }
-      )
-    }
-
-    // Get settings for prize info
-    const { data: settings } = await supabase
-      .from('settings')
-      .select('winners_per_group, payout_percentages, entry_fee, gameweek_number, standings_refresh_interval')
-      .single()
-
-    // Get total members in this group for pot calculation
-    const groupSize = group.group_members.length
-    const totalPot = (settings?.entry_fee ?? 200) * groupSize
-    const platformCut = settings?.payout_percentages?.platform ?? 10
-    const distributablePot = Math.floor(totalPot * (1 - platformCut / 100))
-
-    // Sort members by standing position (or recalculate)
-    const members = group.group_members
-    const positions = calculateStandings(members)
-
-    // Build sorted standings
-    const standings = members
-      .map((m) => ({
-        ...m,
-        standing_position: positions.get(m.fpl_team_id) ?? m.standing_position,
-        is_clean: m.transfer_hits === 0 && !m.chip_used,
-      }))
-      .sort((a, b) => {
-        const posA = positions.get(a.fpl_team_id) ?? 999
-        const posB = positions.get(b.fpl_team_id) ?? 999
-        return posA - posB
-      })
-
-    // Calculate prize amounts per position
-    const prizesByPosition: Record<string, number> = {}
-    if (settings?.payout_percentages) {
-      Object.entries(settings.payout_percentages).forEach(([pos, pct]) => {
-        if (pos !== 'platform' && typeof pct === 'number') {
-          prizesByPosition[pos] = Math.floor(distributablePot * (pct / 100))
-        }
-      })
-    }
-
-    const lastRefreshed = members
-      .map((m) => m.last_refreshed_at)
-      .filter(Boolean)
-      .sort()
-      .pop()
-
-    logger.standings.info(`Serving standings for group ${groupId} (${members.length} members)`, {
-      file,
-    })
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        groupId: group.id,
-        groupNumber: group.group_number,
-        gameweekNumber: group.gameweek_number,
-        standings,
-        prizesByPosition,
-        winnersPerGroup: settings?.winners_per_group ?? 2,
-        totalPot,
-        distributablePot,
-        lastRefreshed: lastRefreshed ?? null,
-        refreshInterval: settings?.standings_refresh_interval ?? 120,
-      },
-    })
-  } catch (err) {
-    logger.standings.error(`Failed to load standings: ${String(err)}`, {
-      file,
-      function: 'GET /api/standings/[groupId]',
-    })
-
-    return NextResponse.json(
-      { success: false, error: 'Failed to load standings.' },
-      { status: 500 }
-    )
+  if (!groupId) {
+    return NextResponse.json({ success: false, error: 'Group ID is required.' }, { status: 400 })
   }
+
+  const supabase = createServerSupabaseClient()
+
+  // ── Fetch group and its members ──────────────────────────────
+  const { data: group, error: groupError } = await supabase
+    .from('groups')
+    .select(`
+      id,
+      group_number,
+      gameweek_number,
+      entry_tier,
+      group_members (
+        id,
+        fpl_team_id,
+        fpl_team_name,
+        manager_name,
+        entry_tier,
+        gw_points,
+        transfer_hits,
+        chip_used,
+        standing_position,
+        prize_amount,
+        last_refreshed_at
+      )
+    `)
+    .eq('id', groupId)
+    .single()
+
+  if (groupError || !group) {
+    return NextResponse.json({ success: false, error: 'Group not found.' }, { status: 404 })
+  }
+
+  // ── Fetch platform settings ───────────────────────────────────
+  const { data: settings } = await supabase
+    .from('settings')
+    .select('casual_settings, elite_settings, standings_refresh_interval, gameweek_number')
+    .single()
+
+  if (!settings) {
+    return NextResponse.json({ success: false, error: 'Settings not found.' }, { status: 500 })
+  }
+
+  const members = group.group_members ?? []
+
+  // ── Resolve the correct tier settings ────────────────────────
+  // The group's entry_tier tells us which tier config to use.
+  // Fall back gracefully if the column is somehow null (old data).
+  const groupTier = group.entry_tier ?? 'casual'
+  const tierSettings: TierSettings = groupTier === 'elite'
+    ? (settings.elite_settings as TierSettings)
+    : (settings.casual_settings as TierSettings)
+
+  const entryFee = tierSettings?.entry_fee ?? 200
+  const winnersPerGroup = tierSettings?.winners_per_group ?? 1
+  const payoutPercentages: Record<string, number> = tierSettings?.payout_percentages ?? { '1': 90, platform: 10 }
+
+  // ── Calculate prize pool for this group ───────────────────────
+  // Total pot = actual number of members × entry fee for this tier.
+  const memberCount = members.length
+  const totalPot = memberCount * entryFee
+  const platformCutPct = payoutPercentages['platform'] ?? 0
+
+  // Prize amounts are calculated directly from totalPot using the admin-set percentages.
+  // e.g. if admin sets platform=20%, winner=80%, and totalPot=600:
+  //   platform gets 120, winner gets 480. That's it — no double-deduction.
+  //
+  // distributablePot = sum of all winner prizes (totalPot minus platform cut).
+  // This is what we show as "Prize pool" in the UI.
+
+  // ── Build prizesByPosition map ────────────────────────────────
+  const prizesByPosition: Record<string, number> = {}
+  for (let pos = 1; pos <= winnersPerGroup; pos++) {
+    const posKey = pos.toString()
+    const pct = payoutPercentages[posKey]
+    if (pct && pct > 0) {
+      // Prize = totalPot × position percentage (admin already set these to sum with platform to 100%)
+      prizesByPosition[posKey] = Math.floor(totalPot * (pct / 100))
+    }
+  }
+
+  // distributablePot = total minus platform cut (shown as prize pool in UI)
+  const distributablePot = Math.floor(totalPot * (1 - platformCutPct / 100))
+
+  // ── Calculate live standings positions ───────────────────────
+  // Recalculate positions live from current points data
+  // (standings_position in DB may be stale between cron runs).
+  const positionMap = calculateStandings(members)
+
+  // ── Build response standings ──────────────────────────────────
+  const standings = members.map(member => {
+    const livePosition = positionMap.get(member.fpl_team_id) ?? 999
+    const isWinner = livePosition <= winnersPerGroup
+    const posKey = livePosition.toString()
+    const prizePct = payoutPercentages[posKey]
+    // Prize = totalPot × the position's percentage (same formula as prizesByPosition above)
+    const livePrizeAmount = isWinner && prizePct
+      ? Math.floor(totalPot * (prizePct / 100))
+      : 0
+
+    const isClean = member.transfer_hits === 0 && !member.chip_used
+
+    return {
+      fpl_team_id: member.fpl_team_id,
+      fpl_team_name: member.fpl_team_name,
+      manager_name: member.manager_name,
+      gw_points: member.gw_points,
+      transfer_hits: member.transfer_hits,
+      chip_used: member.chip_used,
+      standing_position: livePosition,
+      prize_amount: livePrizeAmount,
+      is_clean: isClean,
+      last_refreshed_at: member.last_refreshed_at,
+    }
+  }).sort((a, b) => a.standing_position - b.standing_position)
+
+  // Last refresh time
+  const lastRefreshed = members
+    .map(m => m.last_refreshed_at)
+    .filter(Boolean)
+    .sort()
+    .pop() ?? null
+
+  return NextResponse.json({
+    success: true,
+    data: {
+      groupId: group.id,
+      groupNumber: group.group_number,
+      gameweekNumber: group.gameweek_number,
+      entryTier: groupTier,
+      standings,
+      prizesByPosition,
+      winnersPerGroup,
+      totalPot,
+      distributablePot,
+      lastRefreshed,
+      refreshInterval: settings.standings_refresh_interval ?? 30,
+    },
+  })
 }
