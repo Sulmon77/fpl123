@@ -329,13 +329,13 @@ export default function StandingsPage() {
                   <p className="font-semibold text-text-primary text-sm">Group Information</p>
                   <p className="text-xs text-text-secondary mt-0.5">
                     {standingsData?.standings.length ?? 0} managers competing ·{' '}
-                    Top {standingsData?.winnersPerGroup ?? 1} win prizes
+                    Top {standingsData?.winnersPerGroup ?? 1} will be selected
                   </p>
                 </div>
                 {standingsData && standingsData.distributablePot > 0 && (
                   <div className="text-right">
                     <p className="font-display font-bold text-brand-purple">{formatKES(standingsData.distributablePot)}</p>
-                    <p className="text-xs text-text-secondary">Total prizes</p>
+                    <p className="text-xs text-text-secondary">Total take home amount</p>
                   </div>
                 )}
               </div>
@@ -345,7 +345,7 @@ export default function StandingsPage() {
                 <div className="bg-brand-purple text-white rounded-xl p-5">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-sm font-semibold text-white/80">
-                      🏆 Top {standingsData.winnersPerGroup} in your group win
+                      🏆 Top {standingsData.winnersPerGroup} in your group awarded
                     </p>
                     <span className="text-xs text-white/30">{standingsData.standings.length} managers</span>
                   </div>
@@ -449,7 +449,7 @@ export default function StandingsPage() {
                                       <span className="font-bold text-success text-sm block">
                                         {row.prize_amount > 0 ? formatKES(row.prize_amount) : '—'}
                                       </span>
-                                      <span className="text-[10px] text-success/60 uppercase tracking-wide">prize</span>
+                                      <span className="text-[10px] text-success/60 uppercase tracking-wide">Amount</span>
                                     </div>
                                   )
                                   : <span className="text-text-secondary text-xs">—</span>}
@@ -466,7 +466,7 @@ export default function StandingsPage() {
               {/* Tiebreaker rule */}
               <p className="text-xs text-text-secondary text-center">
                 <ArrowUpDown className="w-3 h-3 inline mr-1" />
-                Managers with no transfer hits and no chips used are ranked higher on equal points
+                Managers with no transfer hits and no chips used are ranked higher on equal points(if there is a tie).
               </p>
 
               {/* Disclaimer */}
@@ -475,7 +475,7 @@ export default function StandingsPage() {
                   <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
                 <p className="text-xs text-amber-700 leading-relaxed">
-                  <strong>Final standings at the close of the gameweek</strong> determine the winners and prize payouts — not live standings. Points are updated automatically but may lag behind FPL&apos;s official scores during the gameweek.
+                  <strong>Final standings at the close of the gameweek</strong> determine the winners and payouts — not live standings. Points are updated automatically but may lag behind FPL&apos;s official scores during the gameweek.
                 </p>
               </div>
             </div>
