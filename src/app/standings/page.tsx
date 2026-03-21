@@ -74,6 +74,31 @@ export default function StandingsPage() {
     finally { setLoadingStandings(false) }
   }, [])
 
+  // Active refresh — calls the FPL API to get fresh data, then updates DB and returns result
+  const [refreshError, setRefreshError] = useState<string | null>(null)
+  const handleUserRefresh = useCallback(async (gid: string) => {
+    setLoadingStandings(true)
+    setRefreshError(null)
+    try {
+      const res = await fetch(`/api/standings/${gid}/refresh`, { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        setStandingsData(data.data)
+      } else if (data.rateLimited) {
+        setRefreshError(data.error)
+        // Still load fresh DB data even if rate limited
+        await loadStandings(gid)
+      } else {
+        // Fall back to passive load on error
+        await loadStandings(gid)
+      }
+    } catch {
+      await loadStandings(gid)
+    } finally {
+      setLoadingStandings(false)
+    }
+  }, [loadStandings])
+
   useEffect(() => {
     if (!groupId || !standingsData) return
     const interval = setInterval(
@@ -278,13 +303,19 @@ export default function StandingsPage() {
                     </p>
                   )}
                 </div>
-                <button
-                  onClick={() => groupId && loadStandings(groupId)}
-                  disabled={loadingStandings}
-                  className="flex items-center gap-1.5 text-sm text-brand-purple font-semibold hover:underline self-start sm:self-auto"
-                >
-                  <RotateCcw className={cn('w-4 h-4', loadingStandings && 'animate-spin')} /> Refresh
-                </button>
+                <div className="flex flex-col items-end gap-1">
+                  <button
+                    onClick={() => groupId && handleUserRefresh(groupId)}
+                    disabled={loadingStandings}
+                    className="flex items-center gap-1.5 text-sm text-brand-purple font-semibold hover:underline self-start sm:self-auto"
+                  >
+                    <RotateCcw className={cn('w-4 h-4', loadingStandings && 'animate-spin')} />
+                    {loadingStandings ? 'Refreshing…' : 'Refresh'}
+                  </button>
+                  {refreshError && (
+                    <p className="text-xs text-warning">{refreshError}</p>
+                  )}
+                </div>
               </div>
 
               {/* Group info card */}

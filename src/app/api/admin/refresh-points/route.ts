@@ -1,15 +1,54 @@
 // src/app/api/admin/refresh-points/route.ts
-// Refreshes GW points for ALL group members by calling FPL API
+// Fetches live GW points from FPL API for all group members,
+// recalculates standings positions AND prize_amounts, writes everything to DB.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdminAuth } from '@/lib/admin-auth'
 import { createServerSupabaseClient } from '@/lib/supabase'
-import { refreshManagerGwPoints } from '@/lib/fpl'
+import { requireAdminAuth } from '@/lib/admin-auth'
 import { calculateStandings } from '@/lib/groups'
+import { calculateGroupPrizes, prizeForPosition } from '@/lib/prizes'
 import { logger } from '@/lib/logger'
+import type { TierSettings } from '@/types'
 
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+const FPL_BASE = 'https://fantasy.premierleague.com/api'
+const FILE = 'src/app/api/admin/refresh-points/route.ts'
+
+interface FplPicksResponse {
+  active_chip: string | null
+  entry_history: {
+    points: number
+    event_transfers_cost: number
+  }
+}
+
+async function fetchMemberPoints(
+  fplTeamId: number,
+  gameweekNumber: number
+): Promise<{ points: number; transferHits: number; chipUsed: string | null } | null> {
+  try {
+    const res = await fetch(
+      `${FPL_BASE}/entry/${fplTeamId}/event/${gameweekNumber}/picks/`,
+      { next: { revalidate: 0 } }   // always fresh
+    )
+    if (!res.ok) return null
+    const data: FplPicksResponse = await res.json()
+
+    const chipUsed = data.active_chip ?? null
+    const normalizedChip =
+      chipUsed === 'wildcard' ? 'wildcard'
+      : chipUsed === 'freehit' ? 'freehit'
+      : chipUsed === 'bboost' ? 'bboost'
+      : chipUsed === '3xc' ? '3xc'
+      : null
+
+    return {
+      points: data.entry_history.points,
+      transferHits: data.entry_history.event_transfers_cost,
+      chipUsed: normalizedChip,
+    }
+  } catch {
+    return null
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -17,96 +56,128 @@ export async function POST(request: NextRequest) {
   if (!auth.authorized) return auth.response!
 
   const supabase = createServerSupabaseClient()
-  const { data: settings } = await supabase.from('settings').select('gameweek_number').single()
+
+  // Get current GW + tier settings
+  const { data: settings } = await supabase
+    .from('settings')
+    .select('gameweek_number, casual_settings, elite_settings')
+    .single()
 
   if (!settings) {
     return NextResponse.json({ success: false, error: 'Settings not found.' }, { status: 500 })
   }
 
-  const { gameweek_number } = settings
+  const gw = settings.gameweek_number
 
-  logger.standings.info(`Starting points refresh for GW${gameweek_number}`, {
-    file: 'src/app/api/admin/refresh-points/route.ts',
-  })
+  // Fetch all groups with their members for the current GW
+  const { data: groups, error: groupsError } = await supabase
+    .from('groups')
+    .select(`
+      id,
+      entry_tier,
+      group_members (
+        id,
+        fpl_team_id,
+        gw_points,
+        transfer_hits,
+        chip_used,
+        standing_position
+      )
+    `)
+    .eq('gameweek_number', gw)
 
-  // Get all group members for this GW
-  const { data: members, error } = await supabase
-    .from('group_members')
-    .select('id, group_id, fpl_team_id')
-    .eq('gameweek_number', gameweek_number)
-
-  if (error || !members) {
-    return NextResponse.json({ success: false, error: 'No group members found.' }, { status: 404 })
+  if (groupsError || !groups) {
+    return NextResponse.json({ success: false, error: 'Failed to fetch groups.' }, { status: 500 })
   }
-
-  logger.standings.info(`Refreshing ${members.length} managers`, {
-    file: 'src/app/api/admin/refresh-points/route.ts',
-  })
 
   let refreshed = 0
   let failed = 0
 
-  for (const member of members) {
-    try {
-      const { gwPoints, transferHits, chipUsed } = await refreshManagerGwPoints(
-        member.fpl_team_id,
-        gameweek_number
-      )
+  for (const group of groups) {
+    const members = group.group_members ?? []
+    if (members.length === 0) continue
 
-      await supabase
-        .from('group_members')
-        .update({
-          gw_points: gwPoints,
-          transfer_hits: transferHits,
-          chip_used: chipUsed,
-          last_refreshed_at: new Date().toISOString(),
-        })
-        .eq('id', member.id)
+    const groupTier = group.entry_tier ?? 'casual'
+    const tierSettings: TierSettings = groupTier === 'elite'
+      ? (settings.elite_settings as TierSettings)
+      : (settings.casual_settings as TierSettings)
 
-      refreshed++
-      await sleep(100) // avoid FPL rate limiting
-    } catch (err) {
-      logger.standings.error(`Failed to refresh FPL ID ${member.fpl_team_id}: ${String(err)}`, {
-        file: 'src/app/api/admin/refresh-points/route.ts',
+    // ── Step 1: Fetch fresh FPL points for every member in parallel ──
+    const pointsResults = await Promise.all(
+      members.map(async member => {
+        const result = await fetchMemberPoints(member.fpl_team_id, gw)
+        return { member, result }
       })
-      failed++
-    }
-  }
+    )
 
-  // Recalculate standings for each group
-  const { data: groups } = await supabase
-    .from('groups')
-    .select('id')
-    .eq('gameweek_number', gameweek_number)
+    // ── Step 2: Build updated member list with fresh points ──────────
+    const updatedMembers: Array<{
+      id: string
+      fpl_team_id: number
+      gw_points: number
+      transfer_hits: number
+      chip_used: string | null
+    }> = []
 
-  if (groups) {
-    for (const group of groups) {
-      const { data: groupMembers } = await supabase
-        .from('group_members')
-        .select('fpl_team_id, gw_points, transfer_hits, chip_used')
-        .eq('group_id', group.id)
-
-      if (!groupMembers) continue
-
-      const positions = calculateStandings(groupMembers)
-
-      for (const [fplTeamId, position] of positions.entries()) {
-        await supabase
-          .from('group_members')
-          .update({ standing_position: position })
-          .eq('group_id', group.id)
-          .eq('fpl_team_id', fplTeamId)
+    for (const { member, result } of pointsResults) {
+      if (result) {
+        updatedMembers.push({
+          id: member.id,
+          fpl_team_id: member.fpl_team_id,
+          gw_points: result.points,
+          transfer_hits: result.transferHits,
+          chip_used: result.chipUsed,
+        })
+        refreshed++
+      } else {
+        // Keep existing values if FPL API failed for this member
+        updatedMembers.push({
+          id: member.id,
+          fpl_team_id: member.fpl_team_id,
+          gw_points: member.gw_points,
+          transfer_hits: member.transfer_hits,
+          chip_used: member.chip_used,
+        })
+        failed++
       }
     }
+
+    // ── Step 3: Recalculate standings positions ──────────────────────
+    const positionMap = calculateStandings(updatedMembers)
+
+    // ── Step 4: Calculate prize amounts using tier settings ──────────
+    const prizeCalc = calculateGroupPrizes(updatedMembers.length, tierSettings)
+
+    // ── Step 5: Write everything back to DB ──────────────────────────
+    const now = new Date().toISOString()
+
+    await Promise.all(
+      updatedMembers.map(member => {
+        const position = positionMap.get(member.fpl_team_id) ?? 999
+        const prizeAmount = prizeForPosition(position, prizeCalc)
+
+        return supabase
+          .from('group_members')
+          .update({
+            gw_points: member.gw_points,
+            transfer_hits: member.transfer_hits,
+            chip_used: member.chip_used,
+            standing_position: position,
+            prize_amount: prizeAmount,   // ← this was missing before
+            last_refreshed_at: now,
+          })
+          .eq('id', member.id)
+      })
+    )
   }
 
-  logger.standings.success(
-    `[CRON STANDINGS] Refreshed ${refreshed} managers. ${failed} failed. Next refresh per settings.`,
-    { file: 'src/app/api/admin/refresh-points/route.ts' }
+  logger.groups.success(
+    `Refresh points: ${refreshed} refreshed, ${failed} failed for GW${gw}`,
+    { file: FILE }
   )
 
   return NextResponse.json({
     success: true,
-    data: { refreshed, failed, total: members.length },
+    data: { refreshed, failed },
   })
 }
