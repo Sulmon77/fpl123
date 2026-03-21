@@ -366,7 +366,7 @@ export default function StandingsPage() {
                         </div>
                       ))}
                   </div>
-                  <p className="text-xs text-white/30 mt-3">Prize = entry fees collected minus platform fee. Grows as more managers join.</p>
+                  <p className="text-xs text-white/30 mt-3">More managers = Higher amount</p>
                 </div>
               )}
 
