@@ -117,6 +117,22 @@ export async function allocateGroups(
       chunks.push(shuffled.slice(i, i + maxGroupSize))
     }
 
+    // Balance last two groups if the last group has less than 3 managers
+    if (chunks.length > 1 && chunks[chunks.length - 1].length < 3) {
+      const lastGroup = chunks.pop()!
+      const secondLastGroup = chunks.pop()!
+      const combined = [...secondLastGroup, ...lastGroup]
+      const firstHalfSize = Math.ceil(combined.length / 2)
+      
+      chunks.push(combined.slice(0, firstHalfSize))
+      chunks.push(combined.slice(firstHalfSize))
+      
+      logger.groups.info(
+        `Rebalanced last two ${currentTier} groups. Combined ${combined.length} managers into groups of ${firstHalfSize} and ${combined.length - firstHalfSize}`,
+        { file: 'src/lib/groups.ts' }
+      )
+    }
+
     logger.groups.info(
       `Creating ${chunks.length} ${currentTier} groups (max ${maxGroupSize}/group)`,
       { file: 'src/lib/groups.ts' }

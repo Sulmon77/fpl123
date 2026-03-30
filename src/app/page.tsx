@@ -183,7 +183,7 @@ export default async function HomePage() {
           <div className="max-w-6xl mx-auto px-4 sm:px-6">
             <div className="grid grid-cols-3 divide-x divide-border">
               {[
-                { label: 'Max group size', value: 'Up to 5' },
+                { label: 'Max group size', value: `Up to ${casualSettings?.max_group_size ?? 16}` },
                 { label: 'Entry from', value: formatKES(casualFee) },
                 { label: 'Paid via', value: 'M-Pesa' },
               ].map(({ label, value }) => (
