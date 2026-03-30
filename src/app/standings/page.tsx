@@ -248,8 +248,8 @@ export default function StandingsPage() {
                     Your PIN is correct and your{' '}
                     {notAllocatedTier
                       ? <strong className={cn('capitalize', notAllocatedTier === 'elite' ? 'text-brand-purple' : 'text-brand-purple')}>
-                          {notAllocatedTier}
-                        </strong>
+                        {notAllocatedTier}
+                      </strong>
                       : 'group'
                     }{' '}
                     entry is confirmed for GW{settings.gameweek_number}.
@@ -466,13 +466,13 @@ export default function StandingsPage() {
               {/* Tiebreaker rule */}
               <p className="text-xs text-text-secondary text-center">
                 <ArrowUpDown className="w-3 h-3 inline mr-1" />
-                Managers with no transfer hits and no chips used are ranked higher on equal points(if there is a tie).
+                Managers with no transfer hits and no chips used are ranked higher on equal points(if there is a)
               </p>
 
               {/* Disclaimer */}
               <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
                 <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
                 <p className="text-xs text-amber-700 leading-relaxed">
                   <strong>Final standings at the close of the gameweek</strong> determine the winners and payouts — not live standings. Points are updated automatically but may lag behind FPL&apos;s official scores during the gameweek.

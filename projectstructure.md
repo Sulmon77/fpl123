@@ -10,6 +10,7 @@ app/
   hall-of-fame/page.tsx             ← server
   history/page.tsx                  ← server
   terms/page.tsx                    ← server
+  rules/page.tsx                    ← server
   [adminPath]/dashboard/...         ← all admin pages (client)
   api/admin/settings/route.ts       ← read/write all settings
   api/admin/end-gameweek/route.ts
@@ -38,14 +39,13 @@ lib/
 
 types/index.ts
 
-## Settings table columns (all in one row)
-gameweek_number, entry_fee, entry_deadline, registration_open,
-gameweek_status (upcoming|ongoing|ended|edit), gameweek_ended,
-giveaway_type, giveaway_description, winners_per_group,
-payout_percentages (jsonb), standings_refresh_interval,
-announcement_text, announcement_visible, terms_text,
-platform_name, history_visible, hall_of_fame_enabled,
-hall_of_fame_price, hall_of_fame_audience
+## Key Database Tables & Columns
+- **settings**: gameweek_number, entry_deadline, registration_open, gameweek_status (upcoming|ongoing|ended|edit), gameweek_ended, casual_settings (jsonb), elite_settings (jsonb), giveaway_type, giveaway_description, standings_refresh_interval, announcement_text, announcement_visible, terms_text, platform_name, history_visible, hall_of_fame_enabled, hall_of_fame_price, hall_of_fame_audience
+- **entries**: entry_tier (casual|elite), payment_method (mpesa|paypal|manual), notes
+- **groups & group_members**: entry_tier (casual|elite)
+- **payouts**: entry_tier (casual|elite), fpl_team_name, group_number, marked_sent_at, marked_sent_by
+- **rules**: title, body, sort_order
+- **giveaway_history**: total_entries, total_amount
 
 ## Key conventions
 - Server components fetch directly via createServerSupabaseClient()
