@@ -123,14 +123,14 @@ export default async function HomePage() {
               </div>
 
               <h1 className="font-display font-bold text-[2.6rem] sm:text-[3.5rem] lg:text-[4.2rem] leading-[1.05] mb-5 animate-slide-up">
-                Prove Your FPL{' '}
-                <span className="text-brand-green">Edge</span>
+                Use Your FPL{' '}
+                <span className="text-brand-green">Points</span>
                 <br className="hidden sm:block" />
                 Among Peers
               </h1>
 
               <p className="text-white/50 text-[1.05rem] sm:text-lg mb-10 max-w-md leading-relaxed animate-slide-up delay-75">
-                A small private circle of serious FPL managers. The best get recognised and paid — straight to M-Pesa.
+                A small private circle of FPL managers. The best get recognised and paid — straight to M-Pesa.
               </p>
 
               {/* Countdown */}
