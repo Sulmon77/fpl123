@@ -1,0 +1,41 @@
+[33m20634f5[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m FPL error initial point
+[33m66e634e[m[33m ([m[1;31morigin/main[m[33m)[m Joining league error
+[33mac27652[m FPL123 call to action update
+[33m5f63d65[m Grouping modified and homepage info
+[33m61f2b6b[m Managers up to 5
+[33mf6d7d8c[m User standings wording
+[33m23a3ed3[m User standings wording
+[33m36e8b37[m Updated user and admin standings
+[33m8b301f7[m Standings prizes update
+[33m2480a52[m Experienced typo
+[33m9f79976[m Removed the words competition and stakes
+[33m3f5ea36[m Tier and verification flip
+[33m598e32e[m Casual and Elite intro
+[33ma2c47d6[m Registration status User Admin sync
+[33m03f185e[m FPL ID tutorial message
+[33m37d24a9[m FPL ID tutorial message
+[33m8c407a7[m fpl123 league kunamabao league
+[33m48bc0ad[m Fix logger namespace in refund route
+[33m6747dd3[m Fix logger calls in refund route
+[33m2468dfd[m Admin features intro and Payouts logic improved
+[33m760adf9[m Mpesa live customer payments to till
+[33ma34b5b3[m Homepage wording update
+[33mb1a0872[m Fix wording back to FPL123
+[33m78f38a8[m Homepage wording update
+[33m7dbac17[m Homepage wording update
+[33m0ac5334[m Homepage wording update
+[33m0625d83[m Homepage wording update
+[33m05becf9[m Update step 3 text and add favicon
+[33mb5e6faf[m Update step 3 text and add favicon
+[33mcbaa0e4[m Fix cookies() Promise in createServerComponentClient
+[33m01afde1[m Fix implicit any type in terms page
+[33mc4811f4[m Add registration_open to terms page settings query
+[33m5f5648e[m Add registration_open to standings Settings interface
+[33m02b7de5[m Fix unknown type error in prize cards
+[33ma0e6b7f[m Fix ManagerCard prop - fplTeamId not gameweekNumber
+[33m831fc16[m Fix type cast in manager auth route
+[33m76be6f9[m Fix logger.info arguments in hall-of-fame update
+[33mb8e0911[m Fix logger.info type error in hall-of-fame update
+[33m5e1df7b[m Fix cron jobs for Vercel free plan
+[33m7ab1ab6[m Rename FPL123 to FPLNow
+[33mfe6f966[m Initial FPL123 build

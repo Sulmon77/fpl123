@@ -10,7 +10,7 @@ const FPL_BASE = 'https://fantasy.premierleague.com/api'
 
 async function fetchFplEntry(teamId: number) {
   const res = await fetch(`${FPL_BASE}/entry/${teamId}/`, {
-    next: { revalidate: 60 },
+    cache: 'no-store',
   })
   if (!res.ok) return null
   return res.json()
@@ -20,17 +20,54 @@ async function checkLeagueMembership(
   teamId: number,
   leagueId: number
 ): Promise<boolean> {
+  const file = 'src/app/api/fpl/verify/route.ts'
   try {
-    // Check classic leagues on the entry summary
-    const res = await fetch(`${FPL_BASE}/entry/${teamId}/`, {
-      next: { revalidate: 60 },
+    // 1. Check classic leagues on the entry summary (Cache bypassed)
+    const entryRes = await fetch(`${FPL_BASE}/entry/${teamId}/`, {
+      cache: 'no-store',
     })
-    if (!res.ok) return false
-    const data = await res.json()
-    const leagues: Array<{ id: number }> =
-      data?.leagues?.classic ?? []
-    return leagues.some((l) => l.id === leagueId)
-  } catch {
+
+    if (entryRes.ok) {
+      const data = await entryRes.json()
+      const leagues: Array<{ id: number }> = data?.leagues?.classic ?? []
+      if (leagues.some((l) => l.id === leagueId)) {
+        logger.fpl.info(`Found ID ${teamId} via direct profile check.`, { file })
+        return true
+      }
+    }
+
+    // 2. FPL API Fallback Check: 
+    // Check the league's actual endpoint. This handles the FPL API caching delay.
+    const leagueRes = await fetch(`${FPL_BASE}/leagues-classic/${leagueId}/standings/`, {
+      cache: 'no-store',
+    })
+
+    if (leagueRes.ok) {
+      const leagueData = await leagueRes.json()
+
+      // Look in new_entries
+      const newEntries: Array<{ entry: number, entry_name: string }> = leagueData?.new_entries?.results ?? []
+      if (newEntries.some((e) => e.entry === teamId)) {
+        logger.fpl.info(`Found ID ${teamId} via league new_entries fallback.`, { file })
+        return true
+      }
+
+      // Look in standard standings (just in case they joined before a standings update)
+      const standings: Array<{ entry: number }> = leagueData?.standings?.results ?? []
+      if (standings.some((e) => e.entry === teamId)) {
+        logger.fpl.info(`Found ID ${teamId} via league standings fallback.`, { file })
+        return true
+      }
+
+      // DEBUGGING EXPOSURE: If we get here, they really aren't in the list.
+      // Let's print the top 5 recent entries so you can see if there was a typo.
+      const recentIds = newEntries.slice(0, 5).map(e => `${e.entry} (${e.entry_name})`).join(', ')
+      logger.fpl.warn(`Membership check failed for ${teamId}. Recent IDs in league: [${recentIds}]`, { file })
+    }
+
+    return false
+  } catch (error) {
+    logger.fpl.error(`League membership check error: ${error}`, { file })
     return false
   }
 }
@@ -42,13 +79,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { fplTeamId, gameweekNumber } = body
 
-    logger.fpl.info(`Verifying FPL ID: ${fplTeamId} for GW${gameweekNumber}`, {
+    // Ensure fplTeamId is treated as a number
+    const numericTeamId = Number(fplTeamId)
+
+    logger.fpl.info(`Verifying FPL ID: ${numericTeamId} for GW${gameweekNumber}`, {
       file,
       function: 'POST /api/fpl/verify',
-      input: { fplTeamId, gameweekNumber },
+      input: { numericTeamId, gameweekNumber },
     })
 
-    if (!fplTeamId || !gameweekNumber) {
+    if (!numericTeamId || !gameweekNumber) {
       return NextResponse.json(
         { success: false, error: 'FPL Team ID and gameweek number are required.' },
         { status: 400 }
@@ -75,7 +115,7 @@ export async function POST(request: NextRequest) {
       .from('blacklist')
       .select('id')
       .eq('type', 'fpl_id')
-      .eq('value', fplTeamId.toString())
+      .eq('value', numericTeamId.toString())
       .single()
 
     if (blacklisted) {
@@ -90,12 +130,10 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Check for existing entry — ONLY block on confirmed ─────
-    // Pending entries are ignored entirely here. The register route
-    // handles pending gracefully (reuses or replaces the pending row).
     const { data: existingEntry } = await supabase
       .from('entries')
       .select('id, payment_status, entry_tier')
-      .eq('fpl_team_id', fplTeamId)
+      .eq('fpl_team_id', numericTeamId)
       .eq('gameweek_number', gameweekNumber)
       .single()
 
@@ -111,10 +149,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Pending entry → continue normally (don't surface it here at all)
-
     // ── Fetch FPL entry from API ───────────────────────────────
-    const fplEntry = await fetchFplEntry(fplTeamId)
+    const fplEntry = await fetchFplEntry(numericTeamId)
 
     if (!fplEntry) {
       return NextResponse.json(
@@ -131,7 +167,7 @@ export async function POST(request: NextRequest) {
     const joinUrl = process.env.FPL_LEAGUE_JOIN_URL ?? null
 
     if (leagueId) {
-      const inLeague = await checkLeagueMembership(fplTeamId, leagueId)
+      const inLeague = await checkLeagueMembership(numericTeamId, leagueId)
       if (!inLeague) {
         return NextResponse.json(
           {
@@ -157,7 +193,7 @@ export async function POST(request: NextRequest) {
       chip_used: null,
     }
 
-    logger.fpl.success(`Verified FPL ID ${fplTeamId}: ${manager.manager_name}`, { file })
+    logger.fpl.success(`Verified FPL ID ${numericTeamId}: ${manager.manager_name}`, { file })
 
     return NextResponse.json({
       success: true,
